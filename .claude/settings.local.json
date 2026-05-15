@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"e:\\\\MERN\\\\PROJECTS\\\\aiseekho\\\\nexus\\\\nexus_mobile\\\\lib\\\\models\")",
+      "Bash(mkdir -p \"e:\\\\MERN\\\\PROJECTS\\\\aiseekho\\\\nexus\\\\nexus_mobile\\\\lib\\\\services\")",
+      "Bash(mkdir -p \"e:\\\\MERN\\\\PROJECTS\\\\aiseekho\\\\nexus\\\\nexus_mobile\\\\lib\\\\screens\")"
+    ]
+  }
+}

@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NEXUS — Autonomous Content-to-Action Agent</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f; --card: #111118; --border: #1e1e2e;
+  --blue: #4f8ef7; --purple: #8b5cf6; --green: #10b981;
+  --amber: #f59e0b; --red: #ef4444; --gray: #6b7280;
+  --text: #e2e8f0; --muted: #64748b; --mono: 'Courier New', monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+.navbar{position:fixed;top:0;left:0;right:0;height:56px;background:#0d0d14;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;z-index:100;}
+.nav-logo{font-size:18px;font-weight:700;color:var(--blue);letter-spacing:1px;}
+.nav-title{font-size:13px;color:var(--muted);}
+.nav-btn{background:var(--blue);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:500;}
+.nav-btn:hover{opacity:0.85;}
+.main{margin-top:56px;padding:20px;display:grid;grid-template-columns:55% 45%;gap:16px;}
+@media(max-width:900px){.main{grid-template-columns:1fr;}}
+.col{display:flex;flex-direction:column;gap:16px;}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;}
+.panel-title{font-size:14px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:10px;}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;}
+textarea,input[type=text]{width:100%;background:#0d0d14;border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px;font-size:13px;resize:vertical;font-family:inherit;outline:none;}
+textarea:focus,input[type=text]:focus{border-color:var(--blue);}
+.btn{padding:10px 20px;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;transition:opacity 0.2s;}
+.btn-blue{background:var(--blue);color:#fff;}
+.btn-blue:hover{opacity:0.85;}
+.btn-purple{background:var(--purple);color:#fff;}
+.btn-green{background:var(--green);color:#fff;}
+.btn-full{width:100%;margin-top:12px;}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+.seed-row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;}
+.seed-chip{padding:6px 14px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:#0d0d14;color:var(--text);}
+.seed-chip:hover{border-color:var(--blue);color:var(--blue);}
+.field-group{margin-bottom:14px;}
+.toggle-row{display:flex;align-items:center;gap:10px;margin:10px 0;}
+.toggle-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
+.toggle-row span{font-size:13px;color:var(--muted);}
+.upload-btn{background:#0d0d14;border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;}
+.upload-btn:hover{border-color:var(--blue);}
+.cred-cards{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.cred-card{background:#0d0d14;border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:120px;}
+.cred-type{font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px;}
+.cred-score{font-size:18px;font-weight:700;}
+.score-high{color:var(--green);}
+.score-mid{color:var(--amber);}
+.score-low{color:var(--red);}
+.bar-wrap{height:6px;background:#1e1e2e;border-radius:3px;margin-top:6px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;transition:width 0.8s ease;}
+.agent-cards{display:flex;gap:12px;flex-wrap:wrap;}
+.agent-card{flex:1;min-width:200px;background:#0d0d14;border-radius:8px;padding:14px;opacity:0;transition:opacity 0.5s ease;}
+.agent-card.visible{opacity:1;}
+.agent-orion{border-left:4px solid var(--green);box-shadow:0 0 12px rgba(16,185,129,0.15);}
+.agent-raven{border-left:4px solid var(--red);box-shadow:0 0 12px rgba(239,68,68,0.15);}
+.agent-cipher{border-left:4px solid var(--purple);box-shadow:0 0 12px rgba(139,92,246,0.15);}
+.agent-name{font-size:13px;font-weight:700;margin-bottom:4px;}
+.persona-pill{display:inline-block;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase;margin-bottom:8px;}
+.pill-opt{background:rgba(16,185,129,0.15);color:var(--green);}
+.pill-pess{background:rgba(239,68,68,0.15);color:var(--red);}
+.pill-real{background:rgba(139,92,246,0.15);color:var(--purple);}
+.insight-text{font-size:12px;color:var(--text);line-height:1.5;margin-bottom:6px;}
+.muted-text{font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:6px;}
+.key-signal{font-size:11px;color:var(--blue);font-style:italic;}
+.conf-label{font-size:10px;color:var(--muted);margin-top:8px;margin-bottom:3px;}
+.resolver-card{background:#0d0d14;border:1px solid var(--purple);border-radius:8px;padding:16px;margin-top:16px;}
+.resolver-title{font-size:13px;font-weight:700;color:var(--purple);margin-bottom:10px;}
+.final-insight{font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;}
+.conf-big{font-size:36px;font-weight:700;color:var(--purple);text-align:center;margin:12px 0;}
+.inv-path{margin-top:10px;}
+.inv-step{font-size:12px;color:var(--muted);padding:4px 0;border-top:1px solid #1e1e2e;}
+.timeline{display:flex;flex-direction:column;gap:8px;}
+.step-item{background:#0d0d14;border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;}
+.step-item:hover{border-color:var(--blue);}
+.step-header{display:flex;align-items:flex-start;gap:10px;}
+.step-num{width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step-body{flex:1;}
+.step-action{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.step-trigger{font-size:11px;color:var(--muted);font-style:italic;}
+.step-meta{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;}
+.badge-blue{background:rgba(79,142,247,0.15);color:var(--blue);}
+.badge-green{background:rgba(16,185,129,0.15);color:var(--green);}
+.badge-amber{background:rgba(245,158,11,0.15);color:var(--amber);}
+.badge-red{background:rgba(239,68,68,0.15);color:var(--red);}
+.badge-gray{background:rgba(107,114,128,0.15);color:var(--gray);}
+.badge-purple{background:rgba(139,92,246,0.15);color:var(--purple);}
+.status-pending{color:var(--gray);}
+.status-running{color:var(--blue);}
+.status-done{color:var(--green);}
+.status-failed{color:var(--red);animation:flash 0.5s ease;}
+.status-recovered{color:var(--amber);}
+@keyframes flash{0%,100%{opacity:1;}50%{opacity:0;}}
+.step-detail{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.detail-row{display:flex;gap:8px;margin-bottom:4px;}
+.detail-label{font-size:10px;color:var(--muted);min-width:80px;}
+.detail-val{font-size:11px;color:var(--text);}
+.chain-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.cost-time-row{display:flex;gap:12px;margin-bottom:14px;}
+.cost-time-box{flex:1;background:#0d0d14;border-radius:6px;padding:10px;text-align:center;}
+.cost-time-box .label{font-size:10px;color:var(--muted);}
+.cost-time-box .val{font-size:16px;font-weight:700;color:var(--blue);}
+.constraint-banner{padding:8px 14px;border-radius:6px;font-size:12px;font-weight:600;margin-bottom:14px;}
+.banner-green{background:rgba(16,185,129,0.1);border:1px solid var(--green);color:var(--green);}
+.banner-amber{background:rgba(245,158,11,0.1);border:1px solid var(--amber);color:var(--amber);}
+.before-after{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+.ba-col{background:#0d0d14;border-radius:8px;padding:14px;}
+.ba-header{font-size:12px;font-weight:700;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.ba-header.before{color:var(--gray);}
+.ba-header.after{color:var(--blue);}
+.ba-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #0f0f1a;font-size:12px;}
+.ba-row.changed{border-left:3px solid var(--amber);padding-left:6px;}
+.ba-key{color:var(--muted);}
+.ba-val{font-weight:600;}
+.metrics-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.metric-card{flex:1;min-width:100px;background:#0d0d14;border-radius:8px;padding:12px;text-align:center;border:1px solid var(--border);}
+.metric-label{font-size:10px;color:var(--muted);margin-bottom:4px;}
+.metric-val{font-size:20px;font-weight:700;color:var(--blue);}
+.log-box{background:#050508;border:1px solid #0f0f1a;border-radius:8px;padding:16px;height:220px;overflow-y:auto;font-family:var(--mono);font-size:13px;color:#00ff88;}
+.log-line{margin-bottom:3px;line-height:1.4;}
+.log-failed{color:var(--red);}
+.log-recovered{color:var(--amber);}
+.log-muted{color:var(--muted);}
+.what-if-item{padding:8px 0;border-bottom:1px solid var(--border);}
+.what-if-item:last-child{border-bottom:none;}
+.what-if-label{font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;}
+.what-if-val{font-size:12px;color:var(--text);}
+.cont-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+.cont-row:hover{color:var(--blue);}
+.contradiction-card{background:#0d0d14;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;}
+.cont-halves{display:grid;grid-template-columns:1fr 1fr;}
+.cont-a{background:rgba(239,68,68,0.05);padding:10px;border-right:1px solid var(--border);}
+.cont-b{background:rgba(245,158,11,0.05);padding:10px;}
+.cont-src{font-size:10px;font-weight:700;text-transform:uppercase;margin-bottom:4px;}
+.cont-claim{font-size:12px;color:var(--text);}
+.cont-footer{padding:10px;border-top:1px solid var(--border);}
+.cont-resolution{font-size:12px;color:var(--muted);}
+.expand-path{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+.expand-path-step{font-size:11px;color:var(--muted);padding:3px 0;}
+.trend-badge{display:inline-block;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;margin-bottom:8px;}
+.trend-worse{background:rgba(239,68,68,0.15);color:var(--red);}
+.trend-better{background:rgba(16,185,129,0.15);color:var(--green);}
+.trend-stable{background:rgba(245,158,11,0.15);color:var(--amber);}
+.excluded-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.excluded-chip{padding:4px 10px;border-radius:10px;font-size:11px;background:rgba(107,114,128,0.1);border:1px solid var(--gray);color:var(--gray);}
+.conf-circle{display:flex;align-items:center;justify-content:center;width:60px;height:60px;border-radius:50%;border:3px solid var(--blue);font-size:20px;font-weight:700;color:var(--blue);margin:0 auto 12px;}
+.cred-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.cred-bar-label{font-size:11px;color:var(--muted);min-width:90px;}
+.cred-bar-outer{flex:1;height:8px;background:#1e1e2e;border-radius:4px;overflow:hidden;}
+.cred-bar-inner{height:100%;border-radius:4px;}
+.cred-bar-pct{font-size:11px;min-width:36px;text-align:right;}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(79,142,247,0.3);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;margin-right:6px;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.baseline-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px;}
+.baseline-table th{text-align:left;padding:6px 8px;color:var(--muted);border-bottom:1px solid var(--border);}
+.baseline-table td{padding:6px 8px;border-bottom:1px solid #0f0f1a;}
+.baseline-table tr:hover td{background:rgba(79,142,247,0.04);}
+.check-yes{color:var(--green);}
+.check-no{color:var(--red);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState, useEffect, useRef, useCallback} = React;
+
+const SEEDS = {
+  sales: {
+    text: "Regional Q3 sales report: Lahore division shows 25% decline in orders. Field reps report customer churn to competitor offering 15% lower pricing on electronics.",
+    csv: "month,orders,revenue_pkr,returns\nJuly,1200,2400000,45\nAugust,980,1960000,67\nSeptember,900,1800000,89",
+    url: "",
+    topic: "sales",
+    domain: "Business",
+    feed: true,
+  },
+  fuel: {
+    text: "Breaking: Government announces 18% increase in petroleum prices effective immediately. Diesel up PKR 22/litre. Transport associations warn of 30% logistics cost surge.",
+    csv: "date,diesel_pkr,transport_index,delivery_complaints\n2026-05-01,278,100,12\n2026-05-08,290,108,28\n2026-05-15,312,119,54",
+    url: "",
+    topic: "fuel",
+    domain: "Logistics",
+    feed: true,
+  },
+  supply: {
+    text: "Port congestion at Karachi delays shipments average 12 days. Three major electronics suppliers halting production due to power rationing. Warehouse manager email says stock is fine for 6 weeks.",
+    csv: "sku,stock_units,days_remaining,supplier_status,last_updated\nSKU-001,450,12,delayed,2026-05-10\nSKU-002,80,2,critical,2026-05-14\nSKU-003,1200,31,normal,2026-04-28",
+    url: "",
+    topic: "supply",
+    domain: "Logistics",
+    feed: true,
+  },
+};
+
+function scoreColor(score) {
+  if (score >= 0.7) return "score-high";
+  if (score >= 0.4) return "score-mid";
+  return "score-low";
+}
+
+function barColor(score) {
+  if (score >= 0.7) return "var(--green)";
+  if (score >= 0.4) return "var(--amber)";
+  return "var(--red)";
+}
+
+function StatusBadge({status}) {
+  const map = {
+    PENDING: ["badge-gray","PENDING"],
+    RUNNING: ["badge-blue","RUNNING"],
+    DONE: ["badge-green","DONE"],
+    FAILED: ["badge-red","FAILED"],
+    RECOVERED: ["badge-amber","RECOVERED"],
+  };
+  const [cls, label] = map[status] || ["badge-gray", status];
+  return <span className={`badge ${cls}`}>{label}</span>;
+}
+
+function ConfBar({conf, color}) {
+  const [w, setW] = useState(0);
+  useEffect(() => {setTimeout(() => setW(conf), 100);}, [conf]);
+  return (
+    <div className="bar-wrap">
+      <div className="bar-fill" style={{width:`${w}%`, background: color || "var(--blue)"}} />
+    </div>
+  );
+}
+
+function Panel1({onIngestDone, onAnalyzeDone}) {
+  const [text, setText] = useState("");
+  const [url, setUrl] = useState("");
+  const [csv, setCsv] = useState("");
+  const [domain, setDomain] = useState("Business");
+  const [topic, setTopic] = useState("");
+  const [feed, setFeed] = useState(false);
+  const [file, setFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [ingestDone, setIngestDone] = useState(false);
+  const [credMap, setCredMap] = useState({});
+  const [analyzing, setAnalyzing] = useState(false);
+  const fileRef = useRef();
+
+  function loadSeed(key) {
+    const s = SEEDS[key];
+    setText(s.text); setCsv(s.csv); setUrl(s.url);
+    setTopic(s.topic); setDomain(s.domain); setFeed(s.feed);
+  }
+
+  async function handleIngest() {
+    setLoading(true);
+    const fd = new FormData();
+    fd.append("text", text);
+    fd.append("url", url);
+    fd.append("csv_data", csv);
+    fd.append("domain", domain);
+    fd.append("topic", topic);
+    fd.append("include_feed", feed ? "true" : "false");
+    if (file) fd.append("file", file);
+    try {
+      const res = await fetch("/ingest", {method:"POST", body:fd});
+      const data = await res.json();
+      setCredMap(data.credibility_map || {});
+      setIngestDone(true);
+      onIngestDone(data, domain);
+    } catch(e) {
+      alert("Ingest failed: " + e.message);
+    }
+    setLoading(false);
+  }
+
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    try {
+      const res = await fetch("/analyze", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({domain})
+      });
+      const data = await res.json();
+      onAnalyzeDone(data);
+    } catch(e) {
+      alert("Analysis failed: " + e.message);
+    }
+    setAnalyzing(false);
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-title">Ingest Sources</div>
+      <div className="field-group">
+        <label>Domain</label>
+        <select value={domain} onChange={e=>setDomain(e.target.value)}
+          style={{width:"100%",background:"#0d0d14",border:"1px solid var(--border)",color:"var(--text)",padding:"8px",borderRadius:"6px",fontSize:"13px"}}>
+          {["Business","Policy","Logistics","Finance","News"].map(d=><option key={d}>{d}</option>)}
+        </select>
+      </div>
+      <div className="seed-row">
+        <button className="seed-chip" onClick={()=>loadSeed("sales")}>📉 Sales Drop</button>
+        <button className="seed-chip" onClick={()=>loadSeed("fuel")}>⛽ Fuel Hike</button>
+        <button className="seed-chip" onClick={()=>loadSeed("supply")}>🏭 Supply Chain</button>
+      </div>
+      <div className="field-group">
+        <label>Text / Article / Report</label>
+        <textarea rows={4} placeholder="Paste text, news article, or report..." value={text} onChange={e=>setText(e.target.value)}/>
+      </div>
+      <div className="field-group">
+        <label>URL to fetch (optional)</label>
+        <input type="text" placeholder="Article URL to fetch (optional)" value={url} onChange={e=>setUrl(e.target.value)}/>
+      </div>
+      <div className="field-group">
+        <label>CSV data (optional)</label>
+        <textarea rows={3} placeholder="Paste CSV data — include date/month column for temporal analysis" value={csv} onChange={e=>setCsv(e.target.value)}/>
+      </div>
+      <div className="field-group">
+        <label>PDF Upload</label>
+        <input ref={fileRef} type="file" accept=".pdf" style={{display:"none"}} onChange={e=>setFile(e.target.files[0])}/>
+        <button className="upload-btn" onClick={()=>fileRef.current.click()}>
+          📎 Upload PDF {file && <span style={{color:"var(--green)"}}> — {file.name}</span>}
+        </button>
+      </div>
+      <div className="toggle-row">
+        <input type="checkbox" id="feedToggle" checked={feed} onChange={e=>setFeed(e.target.checked)}/>
+        <label htmlFor="feedToggle" style={{marginBottom:0}}><span>Include live signal feed</span></label>
+      </div>
+      <button className="btn btn-blue btn-full" onClick={handleIngest} disabled={loading}>
+        {loading ? <><span className="spinner"/>Ingesting 5 sources...</> : "Ingest All Sources"}
+      </button>
+      {ingestDone && (
+        <>
+          <div className="cred-cards">
+            {Object.entries(credMap).map(([type, score]) => (
+              <div key={type} className="cred-card">
+                <div className="cred-type">{type.replace("_"," ")}</div>
+                <div className={`cred-score ${scoreColor(score)}`}>{Math.round(score*100)}%</div>
+                <div className="bar-wrap"><div className="bar-fill" style={{width:`${score*100}%`,background:barColor(score)}}/></div>
+              </div>
+            ))}
+          </div>
+          <button className="btn btn-purple btn-full" onClick={handleAnalyze} disabled={analyzing} style={{marginTop:12}}>
+            {analyzing ? <><span className="spinner"/>Running 5 agents...</> : "Run Analysis"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Panel2({ingestData}) {
+  const [expanded, setExpanded] = useState({});
+  if (!ingestData) return (
+    <div className="panel">
+      <div className="panel-title">Source Intelligence</div>
+      <p className="muted-text">Run ingest to see source analysis.</p>
+    </div>
+  );
+
+  const {credibility_map={}, contradictions={}, temporal_analysis={}, noise_filtered=[]} = ingestData;
+  const contList = contradictions.contradictions || [];
+  const conf = contradictions.overall_signal_confidence || 0;
+
+  function trendClass(dir) {
+    if (dir === "worsening") return "trend-worse";
+    if (dir === "improving") return "trend-better";
+    return "trend-stable";
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-title">Source Intelligence</div>
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:12,color:"var(--muted)",marginBottom:8}}>Credibility Scores</div>
+        {Object.entries(credibility_map).map(([type,score]) => (
+          <div key={type} className="cred-bar-row">
+            <span className="cred-bar-label">{type.replace("_"," ")}</span>
+            <div className="cred-bar-outer">
+              <div className="cred-bar-inner" style={{width:`${score*100}%`,background:barColor(score)}}/>
+            </div>
+            <span className={`cred-bar-pct ${scoreColor(score)}`}>{Math.round(score*100)}%</span>
+          </div>
+        ))}
+      </div>
+
+      {temporal_analysis.has_trend && (
+        <div style={{marginBottom:14,padding:10,background:"#0d0d14",borderRadius:8}}>
+          <div style={{fontSize:11,color:"var(--muted)",marginBottom:6}}>Temporal Analysis</div>
+          <span className={`trend-badge ${trendClass(temporal_analysis.trend_direction)}`}>
+            {temporal_analysis.trend_direction?.toUpperCase() || "UNKNOWN"}
+          </span>
+          <div className="muted-text">{temporal_analysis.trend_description}</div>
+          <div style={{fontSize:11,color:"var(--amber)",marginTop:4}}>Rate: {temporal_analysis.rate_of_change}</div>
+        </div>
+      )}
+
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:12,color:"var(--muted)",marginBottom:8}}>Contradictions ({contList.length})</div>
+        {contList.map((c,i) => (
+          <div key={i} className="contradiction-card">
+            <div className="cont-halves">
+              <div className="cont-a">
+                <div className="cont-src" style={{color:"var(--red)"}}>{c.source_a_type}</div>
+                <div className="cont-claim">{c.claim_a}</div>
+              </div>
+              <div className="cont-b">
+                <div className="cont-src" style={{color:"var(--amber)"}}>{c.source_b_type}</div>
+                <div className="cont-claim">{c.claim_b}</div>
+              </div>
+            </div>
+            <div className="cont-footer">
+              <div className="cont-resolution">✓ {c.resolution_action}</div>
+              <div className="muted-text" style={{marginTop:4}}>Trusted: {c.trusted_source} — {c.trust_reason}</div>
+              <div className="cont-row" onClick={()=>setExpanded(e=>({...e,[i]:!e[i]}))}>
+                <span style={{fontSize:11,color:"var(--blue)"}}>Investigation Path</span>
+                <span style={{color:"var(--muted)"}}>{expanded[i] ? "▲" : "▼"}</span>
+              </div>
+              {expanded[i] && (
+                <div className="expand-path">
+                  {(c.investigation_path||[]).map((s,j)=>(
+                    <div key={j} className="expand-path-step">{j+1}. {s}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {noise_filtered.length > 0 && (
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:"var(--muted)",marginBottom:6}}>Excluded Sources</div>
+          <div className="excluded-row">
+            {noise_filtered.map((t,i)=><span key={i} className="excluded-chip">{t} — score &lt; 0.30</span>)}
+          </div>
+        </div>
+      )}
+
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:10,color:"var(--muted)",marginBottom:6}}>Overall Signal Confidence</div>
+        <div className="conf-circle">{conf}</div>
+      </div>
+    </div>
+  );
+}
+
+function Panel3({analysisData}) {
+  const [visible, setVisible] = useState([false,false,false]);
+
+  useEffect(() => {
+    if (!analysisData) return;
+    [0,1,2].forEach(i => setTimeout(() => setVisible(v => {const n=[...v];n[i]=true;return n;}), i*200));
+  }, [analysisData]);
+
+  if (!analysisData) return (
+    <div className="panel">
+      <div className="panel-title">Agent Analysis</div>
+      <p className="muted-text">Run analysis to see agent debate.</p>
+    </div>
+  );
+
+  const agents = analysisData.agents || [];
+  const resolved = analysisData.resolved || {};
+  const agentStyles = [
+    {cls:"agent-orion", pill:"pill-opt"},
+    {cls:"agent-raven", pill:"pill-pess"},
+    {cls:"agent-cipher", pill:"pill-real"},
+  ];
+  const agentColors = ["var(--green)","var(--red)","var(--purple)"];
+
+  return (
+    <div className="panel">
+      <div className="panel-title">Agent Analysis</div>
+      <div className="agent-cards">
+        {agents.map((ag,i) => (
+          <div key={i} className={`agent-card ${agentStyles[i].cls} ${visible[i]?"visible":""}`}>
+            <div className="agent-name">{ag.agent}</div>
+            <span className={`persona-pill ${agentStyles[i].pill}`}>{ag.persona}</span>
+            <div className="insight-text">{ag.insight}</div>
+            <div className="muted-text">{ag.impact}</div>
+            <div className="key-signal">{ag.key_signal}</div>
+            <div className="conf-label">Confidence: {ag.confidence}%</div>
+            <ConfBar conf={ag.confidence} color={agentColors[i]}/>
+          </div>
+        ))}
+      </div>
+      <div className="resolver-card">
+        <div className="resolver-title">Resolver Synthesis</div>
+        <div className="final-insight">{resolved.final_insight}</div>
+        <div className="muted-text">{resolved.situation_summary}</div>
+        <div className="muted-text" style={{marginTop:8,fontStyle:"italic"}}>{resolved.remaining_uncertainty}</div>
+        <div className="inv-path">
+          {(resolved.investigation_path||[]).map((s,i)=>(
+            <div key={i} className="inv-step">{i+1}. {s}</div>
+          ))}
+        </div>
+        <div className="conf-big">{resolved.confidence}%</div>
+      </div>
+    </div>
+  );
+}
+
+function Panel4({analysisData, onExecuteDone}) {
+  const [chain, setChain] = useState([]);
+  const [executing, setExecuting] = useState(false);
+  const [expanded, setExpanded] = useState({});
+  const pollRef = useRef(null);
+
+  useEffect(() => {
+    if (analysisData?.action_chain) setChain(analysisData.action_chain);
+  }, [analysisData]);
+
+  async function handleExecute() {
+    setExecuting(true);
+    try {
+      const res = await fetch("/execute", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({chain, domain: analysisData?.domain || "Business"})
+      });
+      const data = await res.json();
+      setChain(data.chain || []);
+      onExecuteDone(data);
+    } catch(e) {
+      alert("Execution failed: " + e.message);
+    }
+    setExecuting(false);
+  }
+
+  if (!analysisData) return (
+    <div className="panel">
+      <div className="panel-title">Action Chain</div>
+      <p className="muted-text">Run analysis to see action chain.</p>
+    </div>
+  );
+
+  const modCount = chain.filter(a=>a.was_modified).length;
+  const totalCost = analysisData.total_estimated_cost_pkr || 0;
+  const totalTime = analysisData.total_estimated_time_minutes || 0;
+
+  return (
+    <div className="panel">
+      <div className="panel-title">Action Chain</div>
+      <div className="cost-time-row">
+        <div className="cost-time-box">
+          <div className="label">Total Cost</div>
+          <div className="val">PKR {totalCost.toLocaleString()}</div>
+        </div>
+        <div className="cost-time-box">
+          <div className="label">Total Time</div>
+          <div className="val">{totalTime} min</div>
+        </div>
+      </div>
+      {modCount === 0
+        ? <div className="constraint-banner banner-green">✓ All 5 actions feasible within constraints</div>
+        : <div className="constraint-banner banner-amber">⚠ {modCount} action{modCount>1?"s":""} modified to meet constraints</div>
+      }
+      <div className="timeline">
+        {chain.map((action,i) => (
+          <div key={i} className="step-item" onClick={()=>setExpanded(e=>({...e,[i]:!e[i]}))}>
+            <div className="step-header">
+              <div className="step-num">{action.step}</div>
+              <div className="step-body">
+                <div className="step-action">{action.action}</div>
+                <div className="step-trigger">↳ {action.triggered_by}</div>
+                <div className="step-trigger" style={{color:"var(--blue)"}}>→ {action.enables}</div>
+                <div className="step-meta">
+                  <span className="badge badge-blue">PKR {(action.estimated_cost_pkr||0).toLocaleString()}</span>
+                  <span className="badge badge-gray">{action.estimated_time_minutes||action.estimated_time_hours} min</span>
+                  {action.feasible ? <span className="badge badge-green">Feasible</span> : <span className="badge badge-red">Modified</span>}
+                  <StatusBadge status={action.status || "PENDING"}/>
+                </div>
+              </div>
+            </div>
+            {expanded[i] && (
+              <div className="step-detail">
+                <div className="detail-row"><span className="detail-label">Side Effect:</span><span className="detail-val">{action.side_effect}</span></div>
+                <div className="detail-row"><span className="detail-label">Monitor:</span><span className="detail-val">{action.monitor}</span></div>
+                {action.was_modified && <div className="detail-row"><span className="detail-label">Note:</span><span className="detail-val" style={{color:"var(--amber)"}}>Modified to meet constraints</span></div>}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <button className="btn btn-green btn-full" onClick={handleExecute} disabled={executing||chain.length===0}>
+        {executing ? <><span className="spinner"/>Executing chain...</> : "Execute Chain"}
+      </button>
+    </div>
+  );
+}
+
+function Panel5({executeData}) {
+  const [baseline, setBaseline] = useState(null);
+
+  async function loadBaseline() {
+    const res = await fetch("/baseline-comparison");
+    setBaseline(await res.json());
+  }
+
+  if (!executeData) return (
+    <div className="panel">
+      <div className="panel-title">System Outcome</div>
+      <p className="muted-text">Execute chain to see before/after comparison.</p>
+    </div>
+  );
+
+  const {before_state={}, after_state={}, total_cost_pkr=0, total_latency_ms=0, failures=0, recovered=0, chain=[]} = executeData;
+  const fields = ["status","actions_completed","total_cost_pkr","total_latency_ms","actions_failed","actions_recovered"];
+
+  function isChanged(f) {
+    return String(before_state[f]) !== String(after_state[f]);
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-title">System Outcome</div>
+      <div className="metrics-row">
+        {[["Total Cost", `PKR ${total_cost_pkr.toLocaleString()}`],["Latency",`${total_latency_ms}ms`],["Failures",failures],["Recovered",recovered]].map(([l,v])=>(
+          <div key={l} className="metric-card"><div className="metric-label">{l}</div><div className="metric-val">{v}</div></div>
+        ))}
+      </div>
+      <div className="before-after">
+        <div className="ba-col">
+          <div className="ba-header before">Before</div>
+          {fields.map(f=>(
+            <div key={f} className={`ba-row ${isChanged(f)?"changed":""}`}>
+              <span className="ba-key">{f.replace(/_/g," ")}</span>
+              <span className="ba-val">{String(before_state[f]??"-")}</span>
+            </div>
+          ))}
+        </div>
+        <div className="ba-col">
+          <div className="ba-header after">After</div>
+          {fields.map(f=>(
+            <div key={f} className={`ba-row ${isChanged(f)?"changed":""}`}>
+              <span className="ba-key">{f.replace(/_/g," ")}</span>
+              <span className="ba-val" style={isChanged(f)?{color:"var(--amber)"}:{}}>{String(after_state[f]??"-")}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:12,color:"var(--muted)",marginBottom:8}}>What-If Side Effects</div>
+        {chain.filter(a=>a.side_effect).map((a,i)=>(
+          <div key={i} className="what-if-item">
+            <div className="what-if-label">Step {a.step} — {a.monitor}</div>
+            <div className="what-if-val">{a.side_effect}</div>
+          </div>
+        ))}
+      </div>
+      <button className="btn btn-blue" style={{width:"100%",marginBottom:8}} onClick={loadBaseline}>
+        View Baseline vs NEXUS
+      </button>
+      {baseline && (
+        <table className="baseline-table">
+          <thead><tr><th>Capability</th><th>Simple</th><th>NEXUS</th></tr></thead>
+          <tbody>
+            {Object.entries({
+              "Contradiction detection": [baseline.simple_heuristic.contradiction_detection, baseline.nexus_agentic.contradiction_detection],
+              "Credibility scoring": [baseline.simple_heuristic.source_credibility_scoring, baseline.nexus_agentic.source_credibility_scoring],
+              "Temporal analysis": [baseline.simple_heuristic.temporal_analysis, baseline.nexus_agentic.temporal_analysis],
+              "Failure recovery": [baseline.simple_heuristic.failure_recovery, baseline.nexus_agentic.failure_recovery],
+              "Avg latency": [baseline.simple_heuristic.avg_latency_ms+"ms", baseline.nexus_agentic.avg_latency_ms+"ms"],
+              "False signals caught": [baseline.simple_heuristic.false_signals_caught, baseline.nexus_agentic.false_signals_caught],
+            }).map(([cap,[s,n]])=>(
+              <tr key={cap}>
+                <td>{cap}</td>
+                <td className={s===true?"check-yes":s===false?"check-no":""}>{s===true?"✓":s===false?"✗":s}</td>
+                <td className={n===true?"check-yes":n===false?"check-no":""}>{n===true?"✓":n===false?"✗":n}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function Panel6() {
+  const [logs, setLogs] = useState([]);
+  const logRef = useRef(null);
+
+  useEffect(() => {
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch("/logs");
+        const data = await res.json();
+        setLogs(data.logs || []);
+      } catch(_) {}
+    }, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logs]);
+
+  function logClass(msg) {
+    if (!msg) return "";
+    const m = msg.toLowerCase();
+    if (m.includes("failed") || m.includes("error")) return "log-failed";
+    if (m.includes("recovered") || m.includes("retry")) return "log-recovered";
+    return "";
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-title">Execution Log</div>
+      <div className="log-box" ref={logRef}>
+        {logs.length === 0
+          ? <div className="log-muted">Waiting for activity...</div>
+          : logs.map((l,i) => (
+            <div key={i} className={`log-line ${logClass(l.message)}`}>
+              [{l.time_display}] {l.message}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [ingestData, setIngestData] = useState(null);
+  const [analysisData, setAnalysisData] = useState(null);
+  const [executeData, setExecuteData] = useState(null);
+
+  async function downloadTrace() {
+    const res = await fetch("/export-trace");
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "nexus_antigravity_trace.json";
+    a.click();
+    alert("Trace downloaded — submit this file with your Antigravity logs");
+  }
+
+  return (
+    <>
+      <div className="navbar">
+        <div className="nav-logo">⬡ NEXUS</div>
+        <div className="nav-title">Challenge 1 — Content-to-Action Agent</div>
+        <button className="nav-btn" onClick={downloadTrace}>Export Trace</button>
+      </div>
+      <div className="main">
+        <div className="col">
+          <Panel1
+            onIngestDone={(data, domain) => setIngestData({...data, domain})}
+            onAnalyzeDone={setAnalysisData}
+          />
+          <Panel2 ingestData={ingestData}/>
+          <Panel3 analysisData={analysisData}/>
+        </div>
+        <div className="col">
+          <Panel4 analysisData={analysisData} onExecuteDone={setExecuteData}/>
+          <Panel5 executeData={executeData}/>
+          <Panel6/>
+        </div>
+      </div>
+    </>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App/>);
+</script>
+</body>
+</html>
