@@ -4,3 +4,5 @@ google-generativeai
 pymupdf
 python-multipart
 httpx
+gspread
+google-auth

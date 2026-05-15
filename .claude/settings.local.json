@@ -3,7 +3,8 @@
     "allow": [
       "Bash(mkdir -p \"e:\\\\MERN\\\\PROJECTS\\\\aiseekho\\\\nexus\\\\nexus_mobile\\\\lib\\\\models\")",
       "Bash(mkdir -p \"e:\\\\MERN\\\\PROJECTS\\\\aiseekho\\\\nexus\\\\nexus_mobile\\\\lib\\\\services\")",
-      "Bash(mkdir -p \"e:\\\\MERN\\\\PROJECTS\\\\aiseekho\\\\nexus\\\\nexus_mobile\\\\lib\\\\screens\")"
+      "Bash(mkdir -p \"e:\\\\MERN\\\\PROJECTS\\\\aiseekho\\\\nexus\\\\nexus_mobile\\\\lib\\\\screens\")",
+      "Bash(python -c \"import ast, sys; ast.parse\\(open\\('main.py'\\).read\\(\\)\\); print\\('main.py OK'\\)\")"
     ]
   }
 }

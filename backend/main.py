@@ -11,8 +11,8 @@ from fastapi.staticfiles import StaticFiles
 
 from ingestion import IngestionEngine
 from contradiction import ContradictionEngine
-from constraints import DEFAULT_CONSTRAINTS
-from agents import ConsensusEngine
+from constraints import ConstraintChecker, DEFAULT_CONSTRAINTS
+from agents import ConsensusEngine, ExecutorAgent
 from simulator import ActionSimulator, state_store
 
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
@@ -209,6 +209,45 @@ def baseline_comparison():
             "failure_recovery_rate": "100% vs 0%",
             "tradeoff": "3.2s latency vs 0.85s — justified by decision quality",
         },
+    })
+
+
+@app.post("/what-if")
+async def what_if(body: dict):
+    """Re-run ExecutorAgent + ConstraintChecker with modified constraints — counterfactual analysis."""
+    if not state_store.get("analysis_result"):
+        return JSONResponse({"error": "Run /analyze first"}, status_code=400)
+
+    modifications = body.get("modifications", {})
+    base = DEFAULT_CONSTRAINTS.copy()
+    base.update(modifications)
+
+    resolved = state_store["analysis_result"].get("resolved", {})
+    domain = state_store.get("active_domain", "Business")
+
+    executor = ExecutorAgent()
+    raw_chain = await executor.plan_chain(resolved, domain, base)
+    checker = ConstraintChecker()
+    validated = checker.validate_chain(raw_chain, base)
+
+    original_chain = state_store["analysis_result"].get("action_chain", [])
+    original_cost = sum(a.get("estimated_cost_pkr", 0) for a in original_chain)
+
+    new_cost = sum(a.get("estimated_cost_pkr", 0) for a in validated)
+    new_time = sum(a.get("estimated_time_minutes", 0) for a in validated)
+    modified_count = sum(1 for a in validated if a.get("was_modified"))
+
+    logger.info(f"What-if executed — modifications={modifications} — modified_actions={modified_count}")
+
+    return JSONResponse({
+        "what_if_constraints": base,
+        "modifications_applied": modifications,
+        "action_chain": validated,
+        "total_estimated_cost_pkr": new_cost,
+        "total_estimated_time_minutes": new_time,
+        "actions_modified": modified_count,
+        "cost_delta_pkr": new_cost - original_cost,
+        "feasibility_summary": f"{5 - modified_count} of 5 actions feasible under new constraints",
     })
 
 

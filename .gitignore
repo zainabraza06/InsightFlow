@@ -3,6 +3,10 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+
+
+/.claude
+
 # Python
 __pycache__/
 *.py[cod]
