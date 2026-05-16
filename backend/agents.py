@@ -6,6 +6,7 @@ import os
 import google.generativeai as genai
 
 from constraints import ConstraintChecker, DEFAULT_CONSTRAINTS
+import feedback_store
 
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
 logger = logging.getLogger("nexus.agents")
@@ -28,11 +29,41 @@ def _parse_json(raw: str) -> dict:
     return json.loads(raw)
 
 
+def _learning_note(ctx: dict, persona: str) -> str:
+    """Build a learning instruction block from user feedback context."""
+    if not ctx.get("has_feedback"):
+        return ""
+    avg = ctx["avg_rating"]
+    sentiment = ctx["sentiment"]
+    total = ctx["total_feedback"]
+    note = f"\n\n[AGENT LEARNING — {total} past user ratings, avg {avg}/5]\n"
+    if sentiment == "negative":
+        neg = "; ".join(ctx.get("negative_comments", [])) or "analyses felt too generic"
+        note += (
+            f"Users were FRUSTRATED with recent {persona} analyses. Reported issues: {neg}. "
+            "Correct by: being far more specific with named entities, exact numbers, and concrete evidence. "
+            "Avoid vague language. Every claim must cite a source or data point."
+        )
+    elif sentiment == "positive":
+        pos = "; ".join(ctx.get("positive_comments", [])) or "analyses were specific and actionable"
+        note += (
+            f"Users were SATISFIED with recent {persona} analyses. What worked: {pos}. "
+            "Continue this approach — maintain specificity and evidence-based reasoning."
+        )
+    else:
+        note += (
+            "Feedback is mixed. Improve by adding more concrete numbers, "
+            "named entities, and clear causal reasoning in your insight."
+        )
+    return note
+
+
 class OrionAgent:
-    async def analyze(self, text: str, domain: str, credibility_map: dict) -> dict:
+    async def analyze(self, text: str, domain: str, credibility_map: dict, learning_ctx: dict | None = None) -> dict:
+        lnote = _learning_note(learning_ctx or {}, "Orion/Optimist")
         prompt = f"""You are Orion, an AI analyst with a strict OPTIMIST perspective.
 Domain: {domain}
-Source credibility scores: {json.dumps(credibility_map)}
+Source credibility scores: {json.dumps(credibility_map)}{lnote}
 
 Rules:
 - Find the opportunity hidden in this situation. What can be done that most analysts miss?
@@ -75,10 +106,11 @@ Return ONLY valid JSON:
 
 
 class RavenAgent:
-    async def analyze(self, text: str, domain: str, credibility_map: dict) -> dict:
+    async def analyze(self, text: str, domain: str, credibility_map: dict, learning_ctx: dict | None = None) -> dict:
+        lnote = _learning_note(learning_ctx or {}, "Raven/Pessimist")
         prompt = f"""You are Raven, an AI analyst with a strict PESSIMIST perspective.
 Domain: {domain}
-Source credibility scores: {json.dumps(credibility_map)}
+Source credibility scores: {json.dumps(credibility_map)}{lnote}
 
 Rules:
 - Find the worst-case scenario. What risks are being underestimated?
@@ -121,10 +153,11 @@ Return ONLY valid JSON:
 
 
 class CipherAgent:
-    async def analyze(self, text: str, domain: str, credibility_map: dict) -> dict:
+    async def analyze(self, text: str, domain: str, credibility_map: dict, learning_ctx: dict | None = None) -> dict:
+        lnote = _learning_note(learning_ctx or {}, "Cipher/Realist")
         prompt = f"""You are Cipher, an AI analyst with a strict REALIST perspective.
 Domain: {domain}
-Source credibility scores: {json.dumps(credibility_map)}
+Source credibility scores: {json.dumps(credibility_map)}{lnote}
 
 Rules:
 - Weigh both opportunities and risks based on evidence probability.
@@ -344,15 +377,23 @@ class ConsensusEngine:
         credibility_map = filtered_sources.get("credibility_map", {})
         temporal = contradictions.get("temporal_analysis", {})
 
+        # Load domain-level feedback for agent self-improvement
+        learning_ctx = feedback_store.get_domain_learning_context(domain)
+        if learning_ctx.get("has_feedback"):
+            logger.info(
+                f"[NEXUS] Agent learning active — domain={domain} avg_rating={learning_ctx['avg_rating']} "
+                f"sentiment={learning_ctx['sentiment']} n={learning_ctx['total_feedback']}"
+            )
+
         logger.info("Running Orion, Raven, Cipher in parallel via asyncio.gather")
         orion_agent = OrionAgent()
         raven_agent = RavenAgent()
         cipher_agent = CipherAgent()
 
         orion, raven, cipher = await asyncio.gather(
-            orion_agent.analyze(combined_text, domain, credibility_map),
-            raven_agent.analyze(combined_text, domain, credibility_map),
-            cipher_agent.analyze(combined_text, domain, credibility_map),
+            orion_agent.analyze(combined_text, domain, credibility_map, learning_ctx),
+            raven_agent.analyze(combined_text, domain, credibility_map, learning_ctx),
+            cipher_agent.analyze(combined_text, domain, credibility_map, learning_ctx),
         )
 
         cipher_conf = cipher.get("confidence", 70)
@@ -399,4 +440,6 @@ class ConsensusEngine:
             "domain": domain,
             "total_estimated_cost_pkr": total_cost,
             "total_estimated_time_minutes": total_time,
+            "learning_active": learning_ctx.get("has_feedback", False),
+            "learning_context": learning_ctx,
         }

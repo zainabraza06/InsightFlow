@@ -1,7 +1,13 @@
-# Node.js
+# Node.js / Next.js
 node_modules/
 npm-debug.log
 yarn-error.log
+.next/
+frontend-next/.env.local
+
+# User data (generated at runtime)
+backend/users.json
+backend/history.json
 
 
 

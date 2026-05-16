@@ -1,4 +1,6 @@
 import json
+from dotenv import load_dotenv
+load_dotenv()
 import logging
 import os
 from pathlib import Path
@@ -14,6 +16,9 @@ from contradiction import ContradictionEngine
 from constraints import ConstraintChecker, DEFAULT_CONSTRAINTS
 from agents import ConsensusEngine, ExecutorAgent
 from simulator import ActionSimulator, state_store
+from auth import register_user, login_user, get_current_user, get_user_info, update_user
+import history_store
+import feedback_store
 
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
 logger = logging.getLogger("nexus.main")
@@ -27,6 +32,87 @@ app.add_middleware(
 )
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+
+
+# ── Auth endpoints ────────────────────────────────────────────────
+
+@app.post("/auth/register")
+async def auth_register(body: dict):
+    return JSONResponse(register_user(body.get("name", ""), body.get("email", ""), body.get("password", "")))
+
+
+@app.post("/auth/login")
+async def auth_login(body: dict):
+    return JSONResponse(login_user(body.get("email", ""), body.get("password", "")))
+
+
+@app.get("/auth/me")
+async def auth_me(user: str = __import__("fastapi").Depends(get_current_user)):
+    return JSONResponse(get_user_info(user))
+
+
+@app.put("/auth/me")
+async def auth_update(body: dict, user: str = __import__("fastapi").Depends(get_current_user)):
+    return JSONResponse(update_user(user, body.get("name"), body.get("password")))
+
+
+# ── History endpoints ─────────────────────────────────────────────
+
+@app.post("/history")
+async def save_history(body: dict, user: str = __import__("fastapi").Depends(get_current_user)):
+    entry_id = history_store.save_entry(user, body)
+    return JSONResponse({"id": entry_id, "saved": True})
+
+
+@app.get("/history")
+async def get_history(user: str = __import__("fastapi").Depends(get_current_user)):
+    return JSONResponse(history_store.get_entries(user))
+
+
+@app.get("/history/{entry_id}")
+async def get_history_entry(entry_id: str, user: str = __import__("fastapi").Depends(get_current_user)):
+    entry = history_store.get_entry(user, entry_id)
+    if not entry:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return JSONResponse(entry)
+
+
+@app.delete("/history/{entry_id}")
+async def delete_history_entry(entry_id: str, user: str = __import__("fastapi").Depends(get_current_user)):
+    deleted = history_store.delete_entry(user, entry_id)
+    return JSONResponse({"deleted": deleted})
+
+
+# ── Feedback endpoints ────────────────────────────────────────────
+
+@app.post("/feedback")
+async def submit_feedback(body: dict, user: str = __import__("fastapi").Depends(get_current_user)):
+    entry_id = feedback_store.save_feedback(
+        user_email=user,
+        rating=int(body.get("rating", 3)),
+        domain=body.get("domain", ""),
+        comment=body.get("comment", ""),
+        analysis_id=body.get("analysis_id", ""),
+        agent_confidences=body.get("agent_confidences"),
+    )
+    ctx = feedback_store.get_domain_learning_context(body.get("domain", ""))
+    logger.info(f"[FEEDBACK] user={user} rating={body.get('rating')} domain={body.get('domain')} — learning_ctx={ctx}")
+    return JSONResponse({"id": entry_id, "saved": True, "learning_context": ctx})
+
+
+@app.get("/feedback/stats")
+async def feedback_stats(user: str = __import__("fastapi").Depends(get_current_user)):
+    return JSONResponse(feedback_store.get_global_stats())
+
+
+@app.get("/feedback/my")
+async def my_feedback(user: str = __import__("fastapi").Depends(get_current_user)):
+    return JSONResponse(feedback_store.get_user_feedback(user))
+
+
+@app.get("/feedback/domain/{domain}")
+async def domain_feedback(domain: str, user: str = __import__("fastapi").Depends(get_current_user)):
+    return JSONResponse(feedback_store.get_domain_learning_context(domain))
 
 
 @app.get("/health")

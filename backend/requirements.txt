@@ -6,3 +6,5 @@ python-multipart
 httpx
 gspread
 google-auth
+python-dotenv
+pyjwt

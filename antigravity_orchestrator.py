@@ -23,6 +23,8 @@ import logging
 import httpx
 from datetime import datetime
 import google.generativeai as genai
+from dotenv import load_dotenv
+load_dotenv()
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 _api_key = os.environ.get("GOOGLE_API_KEY", "")
