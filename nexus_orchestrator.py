@@ -1,19 +1,19 @@
 """
-NEXUS — Google Antigravity Orchestration Layer
+NEXUS — Google NEXUS Agent Orchestration Layer
 Challenge 1: Autonomous Content-to-Action Agent
 
-Antigravity is the primary manager/commander.
+NEXUS Agent is the primary manager/commander.
 It understands intent, breaks work into steps, calls NEXUS APIs as tools,
 handles failures, coordinates the full workflow, and logs every reasoning step.
 
 Your FastAPI backend = tool set (sub-agents)
-Antigravity (this file) = the boss orchestrating all of them
+NEXUS Agent (this file) = the boss orchestrating all of them
 
 Run:
     cd backend && uvicorn main:app --port 8000 --reload  (in one terminal)
-    cd ..     && python antigravity_orchestrator.py       (in another)
+    cd ..     && python nexus_orchestrator.py       (in another)
 
-Output: antigravity_trace.json  (submit this as your Antigravity proof artifact)
+Output: nexus_trace.json  (submit this as your NEXUS Agent proof artifact)
 """
 
 import json
@@ -35,10 +35,10 @@ if not _api_key:
     )
 genai.configure(api_key=_api_key)
 NEXUS_BASE = os.environ.get("NEXUS_BASE_URL", "http://localhost:8000")
-TRACE_OUTPUT = os.path.join(os.path.dirname(__file__), "antigravity_trace.json")
+TRACE_OUTPUT = os.path.join(os.path.dirname(__file__), "nexus_trace.json")
 
 logging.basicConfig(level=logging.INFO, format="[ANTIGRAVITY] %(message)s")
-logger = logging.getLogger("antigravity")
+logger = logging.getLogger("nexus")
 
 SEP = "─" * 60
 
@@ -46,8 +46,8 @@ SEP = "─" * 60
 # ── TRACE RECORDER ────────────────────────────────────────────────────────────
 class TraceRecorder:
     """
-    Records every Antigravity reasoning step, tool call, decision, and recovery.
-    This is the submission artifact — it proves Antigravity orchestrated NEXUS.
+    Records every NEXUS Agent reasoning step, tool call, decision, and recovery.
+    This is the submission artifact — it proves NEXUS Agent orchestrated NEXUS.
     """
 
     def __init__(self, scenario: str):
@@ -122,27 +122,27 @@ class TraceRecorder:
         return [
             {"step": 1, "task": "Ingest sources", "tool": "POST /ingest", "depends_on": None,
              "expected_output": "credibility_map, contradictions, temporal_analysis, trusted sources list"},
-            {"step": 2, "task": "Reason about ingestion quality — decide to proceed or flag", "tool": "Antigravity reasoning", "depends_on": 1,
+            {"step": 2, "task": "Reason about ingestion quality — decide to proceed or flag", "tool": "NEXUS Agent reasoning", "depends_on": 1,
              "expected_output": "DECISION: proceed / flag / request more data"},
             {"step": 3, "task": "Run 5-agent parallel debate", "tool": "POST /analyze", "depends_on": 2,
              "expected_output": "weighted_confidence, action_chain, constraint violations"},
-            {"step": 4, "task": "Reason about agent debate — evaluate confidence and disagreement", "tool": "Antigravity reasoning", "depends_on": 3,
+            {"step": 4, "task": "Reason about agent debate — evaluate confidence and disagreement", "tool": "NEXUS Agent reasoning", "depends_on": 3,
              "expected_output": "DECISION: execute full chain / execute partial / defer"},
             {"step": 5, "task": "Execute simulated action chain", "tool": "POST /execute", "depends_on": 4,
              "expected_output": "before_state, after_state, failure+recovery log, cost, latency"},
-            {"step": 6, "task": "Reason about execution outcome — verify recovery worked", "tool": "Antigravity reasoning", "depends_on": 5,
+            {"step": 6, "task": "Reason about execution outcome — verify recovery worked", "tool": "NEXUS Agent reasoning", "depends_on": 5,
              "expected_output": "DECISION: run counterfactual / halt / escalate"},
             {"step": 7, "task": "Run counterfactual constraint stress test", "tool": "POST /what-if", "depends_on": 6,
              "expected_output": "modified actions, cost delta, feasibility summary"},
-            {"step": 8, "task": "Final outcome assessment", "tool": "Antigravity reasoning", "depends_on": 7,
+            {"step": 8, "task": "Final outcome assessment", "tool": "NEXUS Agent reasoning", "depends_on": 7,
              "expected_output": "pipeline_status, risk_reduction, recommendations"},
         ]
 
     def export(self) -> dict:
         return {
-            "schema": "antigravity-trace-v1",
+            "schema": "nexus-trace-v1",
             "system": "NEXUS Challenge 1 — Autonomous Content-to-Action Agent",
-            "orchestrator": "Google Antigravity (Gemini 2.0 Flash + Function Calling)",
+            "orchestrator": "Google NEXUS Agent (Gemini 2.0 Flash + Function Calling)",
             "session_id": self.session_id,
             "scenario": self.scenario,
             "started_at": self.started_at,
@@ -160,7 +160,7 @@ class TraceRecorder:
         print(f"\n{SEP}")
         print(f"  TRACE SAVED → {TRACE_OUTPUT}")
         print(f"  Events recorded: {len(self.events)}")
-        print(f"  Submit this file as your Antigravity proof artifact.")
+        print(f"  Submit this file as your NEXUS Agent proof artifact.")
         print(SEP)
         return TRACE_OUTPUT
 
@@ -170,7 +170,7 @@ class TraceRecorder:
 def tool_ingest(trace: TraceRecorder, text: str, csv_data: str, topic: str, domain: str) -> dict:
     trace.record(
         "TOOL_CALL",
-        "Antigravity → NEXUS /ingest — ingesting 5 source types",
+        "NEXUS Agent → NEXUS /ingest — ingesting 5 source types",
         data={
             "tool": "POST /ingest",
             "endpoint": f"{NEXUS_BASE}/ingest",
@@ -224,7 +224,7 @@ def tool_ingest(trace: TraceRecorder, text: str, csv_data: str, topic: str, doma
 def tool_analyze(trace: TraceRecorder, domain: str, reasoning_context: str) -> dict:
     trace.record(
         "TOOL_CALL",
-        "Antigravity → NEXUS /analyze — launching 5-agent parallel debate",
+        "NEXUS Agent → NEXUS /analyze — launching 5-agent parallel debate",
         data={
             "tool": "POST /analyze",
             "endpoint": f"{NEXUS_BASE}/analyze",
@@ -271,7 +271,7 @@ def tool_analyze(trace: TraceRecorder, domain: str, reasoning_context: str) -> d
 def tool_execute(trace: TraceRecorder, domain: str, reasoning_context: str) -> dict:
     trace.record(
         "TOOL_CALL",
-        "Antigravity → NEXUS /execute — simulating 5-step causal action chain",
+        "NEXUS Agent → NEXUS /execute — simulating 5-step causal action chain",
         data={
             "tool": "POST /execute",
             "endpoint": f"{NEXUS_BASE}/execute",
@@ -298,7 +298,7 @@ def tool_execute(trace: TraceRecorder, domain: str, reasoning_context: str) -> d
                     "recovery_outcome": "SUCCESS — chain resumed at step 3",
                     "state_rollback": "partial state rolled back before retry",
                 },
-                reasoning="Step 3 mock failure is a designed robustness test. Antigravity detects the failure, logs it, triggers retry protocol, and resumes the chain — no human intervention required.",
+                reasoning="Step 3 mock failure is a designed robustness test. NEXUS Agent detects the failure, logs it, triggers retry protocol, and resumes the chain — no human intervention required.",
             )
 
         trace.record(
@@ -331,7 +331,7 @@ def tool_execute(trace: TraceRecorder, domain: str, reasoning_context: str) -> d
 def tool_what_if(trace: TraceRecorder, modifications: dict, reasoning_context: str) -> dict:
     trace.record(
         "TOOL_CALL",
-        "Antigravity → NEXUS /what-if — counterfactual constraint stress test",
+        "NEXUS Agent → NEXUS /what-if — counterfactual constraint stress test",
         data={
             "tool": "POST /what-if",
             "endpoint": f"{NEXUS_BASE}/what-if",
@@ -374,16 +374,16 @@ def tool_get_state(trace: TraceRecorder) -> dict:
 
 
 # ── ANTIGRAVITY REASONING ENGINE ──────────────────────────────────────────────
-class AntigravityOrchestrator:
+class NEXUS AgentOrchestrator:
     """
-    The primary Antigravity agent.
+    The primary NEXUS Agent agent.
 
     Uses Gemini 2.0 Flash to reason at each pipeline step —
     evaluating tool results, making decisions, and deciding what to do next.
-    This is what makes Antigravity the orchestrator, not just a wrapper.
+    This is what makes NEXUS Agent the orchestrator, not just a wrapper.
     """
 
-    SYSTEM_PROMPT = """You are the NEXUS Antigravity Orchestrator — the primary AI manager
+    SYSTEM_PROMPT = """You are the NEXUS NEXUS Agent Orchestrator — the primary AI manager
 for Challenge 1 (Autonomous Content-to-Action Agent).
 
 Your role is commander/manager of the NEXUS pipeline:
@@ -394,7 +394,7 @@ Your role is commander/manager of the NEXUS pipeline:
 
 Rules:
 - Be SPECIFIC. Reference actual numbers, source types, confidence scores.
-- Your reasoning is logged as evidence of Antigravity orchestration.
+- Your reasoning is logged as evidence of NEXUS Agent orchestration.
 - Never be generic. Always connect reasoning to the actual data you received.
 - Keep each reasoning response to 3-5 concrete sentences."""
 
@@ -405,7 +405,7 @@ Rules:
         )
 
     def reason(self, trace: TraceRecorder, step_name: str, context: dict) -> str:
-        """Ask Antigravity to reason about the current state and decide what happens next."""
+        """Ask NEXUS Agent to reason about the current state and decide what happens next."""
         prompt = (
             f"Pipeline step: {step_name}\n\n"
             f"Current state:\n{json.dumps(context, indent=2)[:2500]}\n\n"
@@ -423,7 +423,7 @@ Rules:
 
         trace.record(
             "REASONING",
-            f"Antigravity reasoning: {step_name}",
+            f"NEXUS Agent reasoning: {step_name}",
             data={"step": step_name, "context_fields": list(context.keys())},
             reasoning=reasoning,
         )
@@ -439,7 +439,7 @@ Rules:
     ):
         trace.record(
             "DECISION",
-            f"Antigravity decision: {decision_point}",
+            f"NEXUS Agent decision: {decision_point}",
             data={"options_considered": options, "chosen": chosen},
             reasoning=rationale,
         )
@@ -453,13 +453,13 @@ Rules:
         domain: str,
     ) -> dict:
         """
-        Full Antigravity orchestration run.
+        Full NEXUS Agent orchestration run.
         Every reasoning step, tool call, and decision is recorded.
         """
         trace = TraceRecorder(scenario_name)
 
         # ── WORKPLAN + TASK PLAN ─────────────────────────────────────────────
-        trace.record("WORKPLAN", "Antigravity initialised — 7-phase pipeline workplan set",
+        trace.record("WORKPLAN", "NEXUS Agent initialised — 7-phase pipeline workplan set",
                      data=trace._workplan())
         trace.record("TASK_PLAN", "Task plan decomposed — 8 steps with tool assignments and dependencies",
                      data={"tasks": trace._task_plan()})
@@ -607,7 +607,7 @@ Rules:
 
         trace.record(
             "OUTCOME",
-            "Antigravity orchestration complete — all 7 phases executed successfully",
+            "NEXUS Agent orchestration complete — all 7 phases executed successfully",
             data={
                 "pipeline_status": "SUCCESS",
                 "sources_ingested": ingest_result.get("sources_processed", 0),
@@ -682,13 +682,13 @@ if __name__ == "__main__":
     scenario_key = sys.argv[1] if len(sys.argv) > 1 else "supply"
     scenario = SCENARIOS.get(scenario_key, SCENARIOS["supply"])
 
-    print(f"\nNEXUS Antigravity Orchestrator")
+    print(f"\nNEXUS NEXUS Agent Orchestrator")
     print(f"Backend: {NEXUS_BASE}")
     print(f"Scenario: {scenario['name']}")
     print(f"\nMake sure backend is running:")
     print(f"  cd backend && python -m uvicorn main:app --port 8000 --reload\n")
 
-    orchestrator = AntigravityOrchestrator()
+    orchestrator = NEXUS AgentOrchestrator()
     trace = orchestrator.run(
         scenario_name=scenario["name"],
         text=scenario["text"],
@@ -699,5 +699,5 @@ if __name__ == "__main__":
 
     print(f"\nTrace events: {trace['total_events']}")
     print(f"Trace file:   {TRACE_OUTPUT}")
-    print(f"\nThis file proves Antigravity orchestrated NEXUS end-to-end.")
-    print(f"Submit it alongside your PLAN.md as the Antigravity evidence artifact.\n")
+    print(f"\nThis file proves NEXUS Agent orchestrated NEXUS end-to-end.")
+    print(f"Submit it alongside your PLAN.md as the NEXUS Agent evidence artifact.\n")
