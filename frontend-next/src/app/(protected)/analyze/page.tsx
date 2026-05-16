@@ -22,7 +22,7 @@ export default function AnalyzePage() {
   const [budget, setBudget] = useState("500000");
   const [timeHours, setTimeHours] = useState("4");
   const [staff, setStaff] = useState("3");
-  const [urgency, setUrgency] = useState("medium");
+  const [urgency, setUrgency] = useState<"low" | "medium" | "high" | "critical">("medium");
 
   const [ingestResult, setIngestResult] = useState<IngestResult | null>(null);
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null);
@@ -143,7 +143,7 @@ export default function AnalyzePage() {
               <Input label="Max Staff" type="number" value={staff} onChange={(e) => setStaff(e.target.value)} />
               <div>
                 <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Urgency</label>
-                <select value={urgency} onChange={(e) => setUrgency(e.target.value)}
+                <select value={urgency} onChange={(e) => setUrgency(e.target.value as "low" | "medium" | "high" | "critical")}
                   className="mt-1 w-full px-3 py-2 rounded-lg bg-white/5 border border-nexus-border text-sm text-white focus:outline-none focus:ring-2 focus:ring-nexus-cyan/50">
                   {["low", "medium", "high", "critical"].map((u) => <option key={u}>{u}</option>)}
                 </select>

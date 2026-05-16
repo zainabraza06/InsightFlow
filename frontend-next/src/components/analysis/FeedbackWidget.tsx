@@ -64,7 +64,7 @@ export default function FeedbackWidget({ domain, analysisId = "", agentConfidenc
   if (submitted) {
     const avg = learningContext?.avg_rating as number | undefined;
     const sentiment = learningContext?.sentiment as string | undefined;
-    const isLearning = learningContext?.has_feedback;
+    const isLearning = Boolean(learningContext?.has_feedback);
     return (
       <Card glow={selected && selected >= 4 ? "green" : selected && selected <= 2 ? "red" : "cyan"} className="p-4">
         <div className="flex items-start gap-3">

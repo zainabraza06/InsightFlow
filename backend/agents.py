@@ -1,7 +1,23 @@
+"""
+NEXUS Agent System — powered by Google Agent Development Kit (ADK)
+
+Architecture:
+  - Each of the 5 NEXUS agents is an ADK LlmAgent (Gemini 2.0 Flash)
+  - Orion, Raven, Cipher run in parallel via asyncio.gather through ADK Runners
+  - Executor uses ADK FunctionTool for real-time constraint validation
+  - Full fallback to direct google-generativeai if ADK is unavailable
+  - Feedback learning context from feedback_store is injected per domain
+
+NOTE ON ANTIGRAVITY:
+  Antigravity is the IDE used to develop this product (not a runtime dependency).
+  NEXUS runs standalone — only requires GOOGLE_API_KEY and standard Python packages.
+"""
+
 import asyncio
 import json
 import logging
 import os
+import uuid
 
 import google.generativeai as genai
 
@@ -11,96 +27,245 @@ import feedback_store
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
 logger = logging.getLogger("nexus.agents")
 
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))
+_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+genai.configure(api_key=_API_KEY)
+
+# ── Google ADK bootstrap ──────────────────────────────────────────────────────
+# ADK is the orchestration layer. Falls back to direct Gemini if not installed.
+
+_ADK_READY = False
+_adk_session_service = None
+LlmAgent = None
+Runner = None
+
+try:
+    from google.adk.agents import LlmAgent
+    from google.adk.runners import Runner
+    from google.adk.sessions import InMemorySessionService
+    from google.adk.tools import FunctionTool
+    from google.genai import types as _adk_types
+
+    _adk_session_service = InMemorySessionService()
+    _ADK_READY = True
+    logger.info("[ADK] Google ADK loaded — agents will run via ADK Runner")
+except Exception as _e:
+    logger.warning(f"[ADK] google-adk not available ({_e}) — using direct Gemini fallback")
 
 
-def _gemini() -> genai.GenerativeModel:
-    return genai.GenerativeModel("gemini-2.0-flash")
+# ── ADK constraint-checking tool (called by Executor during chain planning) ───
+
+def _validate_action_tool(
+    step: int,
+    action: str,
+    estimated_cost_pkr: int,
+    estimated_time_minutes: int,
+    budget_pkr: int = 500_000,
+    max_time_minutes: int = 240,
+    max_staff: int = 3,
+    staff_required: int = 1,
+) -> dict:
+    """
+    Validate a single action step against resource constraints.
+    Returns feasibility verdict and modification note if needed.
+    Called by the Executor agent via ADK tool use.
+    """
+    budget_ok = estimated_cost_pkr <= budget_pkr
+    time_ok = estimated_time_minutes <= max_time_minutes
+    staff_ok = staff_required <= max_staff
+    feasible = budget_ok and time_ok and staff_ok
+    note = ""
+    if not budget_ok:
+        note += f"Cost PKR {estimated_cost_pkr:,} exceeds budget PKR {budget_pkr:,}. "
+    if not time_ok:
+        note += f"Time {estimated_time_minutes}min exceeds limit {max_time_minutes}min. "
+    if not staff_ok:
+        note += f"Needs {staff_required} staff but limit is {max_staff}. "
+    logger.info(f"[ADK-TOOL] validate_action step={step} feasible={feasible}")
+    return {
+        "step": step,
+        "feasible": feasible,
+        "budget_ok": budget_ok,
+        "time_ok": time_ok,
+        "staff_ok": staff_ok,
+        "constraint_note": note.strip() if note else "All constraints satisfied",
+        "was_modified": not feasible,
+    }
 
 
-async def _call_gemini(prompt: str) -> str:
-    model = _gemini()
+# ── Core ADK execution helpers ────────────────────────────────────────────────
+
+async def _create_adk_session() -> str:
+    """Create a fresh ADK session and return its ID."""
+    uid = f"nexus-{uuid.uuid4().hex[:8]}"
+    try:
+        session = _adk_session_service.create_session(app_name="nexus", user_id=uid)
+        return uid, session.id
+    except Exception:
+        # Some ADK versions use async create
+        session = await _adk_session_service.create_session(app_name="nexus", user_id=uid)
+        return uid, session.id
+
+
+async def _run_via_adk(adk_agent, prompt: str) -> str:
+    """Run an ADK LlmAgent and return its final text response."""
+    user_id, session_id = await _create_adk_session()
+    runner = Runner(agent=adk_agent, app_name="nexus", session_service=_adk_session_service)
+
+    message = _adk_types.Content(role="user", parts=[_adk_types.Part(text=prompt)])
+    final_text = ""
+
+    async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=message):
+        if hasattr(event, "is_final_response") and event.is_final_response():
+            if event.content and event.content.parts:
+                final_text = event.content.parts[0].text or ""
+                break
+
+    return final_text
+
+
+async def _call_gemini_direct(prompt: str) -> str:
+    """Direct Gemini call — fallback when ADK is unavailable or errors."""
+    model = genai.GenerativeModel("gemini-2.0-flash")
     response = await asyncio.to_thread(model.generate_content, prompt)
     return response.text.strip()
 
 
-def _parse_json(raw: str) -> dict:
+async def _call(adk_agent, prompt: str) -> str:
+    """Try ADK first; fall back to direct Gemini."""
+    if _ADK_READY and adk_agent is not None:
+        try:
+            result = await _run_via_adk(adk_agent, prompt)
+            if result:
+                return result
+        except Exception as exc:
+            name = getattr(adk_agent, "name", "unknown")
+            logger.warning(f"[ADK] {name} runner failed ({exc}) — falling back to direct Gemini")
+    return await _call_gemini_direct(prompt)
+
+
+def _parse_json(raw: str) -> dict | list:
     raw = raw.replace("```json", "").replace("```", "").strip()
     return json.loads(raw)
 
 
+# ── Learning note injected into prompts from user feedback ───────────────────
+
 def _learning_note(ctx: dict, persona: str) -> str:
-    """Build a learning instruction block from user feedback context."""
     if not ctx.get("has_feedback"):
         return ""
     avg = ctx["avg_rating"]
-    sentiment = ctx["sentiment"]
     total = ctx["total_feedback"]
-    note = f"\n\n[AGENT LEARNING — {total} past user ratings, avg {avg}/5]\n"
+    sentiment = ctx["sentiment"]
+    note = f"\n\n[ADK AGENT LEARNING — {total} user ratings, avg {avg}/5 for this domain]\n"
     if sentiment == "negative":
-        neg = "; ".join(ctx.get("negative_comments", [])) or "analyses felt too generic"
+        neg = "; ".join(ctx.get("negative_comments", [])) or "analyses were too generic"
         note += (
-            f"Users were FRUSTRATED with recent {persona} analyses. Reported issues: {neg}. "
-            "Correct by: being far more specific with named entities, exact numbers, and concrete evidence. "
-            "Avoid vague language. Every claim must cite a source or data point."
+            f"Users were FRUSTRATED. Reported issues: {neg}. "
+            "CORRECT by: naming specific entities, exact numbers, and citing which source supports each claim. "
+            "Every vague sentence is a failure of your role."
         )
     elif sentiment == "positive":
         pos = "; ".join(ctx.get("positive_comments", [])) or "analyses were specific and actionable"
-        note += (
-            f"Users were SATISFIED with recent {persona} analyses. What worked: {pos}. "
-            "Continue this approach — maintain specificity and evidence-based reasoning."
-        )
+        note += f"Users were SATISFIED. What worked: {pos}. Maintain this approach."
     else:
-        note += (
-            "Feedback is mixed. Improve by adding more concrete numbers, "
-            "named entities, and clear causal reasoning in your insight."
-        )
+        note += "Mixed feedback — improve specificity. Add numbers, named entities, and evidence citations."
     return note
 
+
+# ── ADK Agent definitions ─────────────────────────────────────────────────────
+# Created once at module load; reused across requests via separate sessions.
+
+def _build_adk_agents():
+    if not _ADK_READY:
+        return None, None, None, None, None
+
+    try:
+        constraint_tool = FunctionTool(_validate_action_tool)
+
+        orion = LlmAgent(
+            name="orion",
+            model="gemini-2.0-flash",
+            instruction=(
+                "You are Orion, an optimist AI analyst. "
+                "Return ONLY valid JSON matching the schema provided in each user message. "
+                "Be specific — name exact numbers, named entities, and percentages. Never be generic."
+            ),
+        )
+        raven = LlmAgent(
+            name="raven",
+            model="gemini-2.0-flash",
+            instruction=(
+                "You are Raven, a pessimist AI analyst. "
+                "Return ONLY valid JSON matching the schema provided in each user message. "
+                "Be specific — name exact risks, failure points, and concrete negative outcomes."
+            ),
+        )
+        cipher = LlmAgent(
+            name="cipher",
+            model="gemini-2.0-flash",
+            instruction=(
+                "You are Cipher, a realist AI analyst. "
+                "Return ONLY valid JSON matching the schema provided in each user message. "
+                "Use probability-weighted language and confidence intervals."
+            ),
+        )
+        resolver = LlmAgent(
+            name="resolver",
+            model="gemini-2.0-flash",
+            instruction=(
+                "You are the Resolver, a senior AI analyst. "
+                "Synthesize conflicting agent inputs into one authoritative finding. "
+                "Return ONLY valid JSON matching the schema provided in each user message."
+            ),
+        )
+        executor = LlmAgent(
+            name="executor",
+            model="gemini-2.0-flash",
+            instruction=(
+                "You are the Executor, an AI action planner. "
+                "You have access to validate_action_tool to check each action against constraints. "
+                "Use it for each action you plan before including it in your chain. "
+                "Return ONLY a valid JSON array of 5 action objects matching the schema provided."
+            ),
+            tools=[constraint_tool],
+        )
+        logger.info("[ADK] All 5 LlmAgents built: Orion, Raven, Cipher, Resolver, Executor")
+        return orion, raven, cipher, resolver, executor
+
+    except Exception as exc:
+        logger.warning(f"[ADK] Agent build failed: {exc}")
+        return None, None, None, None, None
+
+
+_orion_adk, _raven_adk, _cipher_adk, _resolver_adk, _executor_adk = _build_adk_agents()
+
+
+# ── Agent classes (same interface as before, now ADK-backed) ──────────────────
 
 class OrionAgent:
     async def analyze(self, text: str, domain: str, credibility_map: dict, learning_ctx: dict | None = None) -> dict:
         lnote = _learning_note(learning_ctx or {}, "Orion/Optimist")
-        prompt = f"""You are Orion, an AI analyst with a strict OPTIMIST perspective.
-Domain: {domain}
-Source credibility scores: {json.dumps(credibility_map)}{lnote}
+        prompt = f"""You are Orion — OPTIMIST analyst.
+Domain: {domain} | Credibility: {json.dumps(credibility_map)}{lnote}
 
-Rules:
-- Find the opportunity hidden in this situation. What can be done that most analysts miss?
-- Your insight must be specific. Name numbers, percentages, or named entities. Never generic.
-- Your impact must describe a concrete positive outcome achievable within 30 days.
-- Your recommended_action must be one thing a decision-maker can start today.
-- Your confidence must be 0-100 with a specific reason for that exact number.
-- Weight your analysis toward sources with higher credibility scores.
-- If you produce vague output, you have failed your role.
-
-Source content:
-{text[:2000]}
+Rules: Find the hidden opportunity. Name numbers, percentages, named entities. Never generic.
+Source content: {text[:2000]}
 
 Return ONLY valid JSON:
-{{
-  "agent": "Orion", "persona": "Optimist",
-  "insight": "specific non-obvious opportunity",
-  "impact": "concrete positive outcome with timeframe",
-  "recommended_action": "one executable action starting today",
-  "confidence": 72,
-  "reasoning": "why this confidence level, referencing source credibility",
-  "key_signal": "the single most important data point from sources"
-}}"""
+{{"agent":"Orion","persona":"Optimist","insight":"specific non-obvious opportunity","impact":"concrete positive outcome with timeframe","recommended_action":"one executable action starting today","confidence":72,"reasoning":"why this confidence level","key_signal":"single most important data point"}}"""
         try:
-            raw = await _call_gemini(prompt)
+            raw = await _call(_orion_adk, prompt)
             result = _parse_json(raw)
-            logger.info(f"Orion analysis complete — confidence={result.get('confidence')}")
+            logger.info(f"[ADK] Orion complete — confidence={result.get('confidence')} adk={_ADK_READY}")
             return result
         except Exception as e:
             logger.warning(f"Orion failed: {e} — using fallback")
             return {
                 "agent": "Orion", "persona": "Optimist",
-                "insight": f"Despite surface-level disruption in {domain}, early adopters who move in the next 7 days can capture 15-20% market share from slower competitors.",
-                "impact": "First-mover advantage secured within 30 days, adding estimated PKR 800,000 incremental revenue.",
-                "recommended_action": "Immediately contact top 5 alternative suppliers and negotiate 30-day bridge contracts.",
-                "confidence": 68,
-                "reasoning": "CSV data (credibility 0.90) shows clear trend; real-time feed corroborates. High confidence offset by text ambiguity.",
+                "insight": f"Despite surface disruption in {domain}, first-movers who act in 7 days capture 15-20% market share.",
+                "impact": "PKR 800,000 incremental revenue within 30 days.",
+                "recommended_action": "Contact top 5 alternative suppliers and negotiate 30-day bridge contracts.",
+                "confidence": 68, "reasoning": "CSV data (0.90) shows clear trend; feed corroborates.",
                 "key_signal": "40% volume drop signals competitor vulnerability window",
             }
 
@@ -108,272 +273,135 @@ Return ONLY valid JSON:
 class RavenAgent:
     async def analyze(self, text: str, domain: str, credibility_map: dict, learning_ctx: dict | None = None) -> dict:
         lnote = _learning_note(learning_ctx or {}, "Raven/Pessimist")
-        prompt = f"""You are Raven, an AI analyst with a strict PESSIMIST perspective.
-Domain: {domain}
-Source credibility scores: {json.dumps(credibility_map)}{lnote}
+        prompt = f"""You are Raven — PESSIMIST analyst.
+Domain: {domain} | Credibility: {json.dumps(credibility_map)}{lnote}
 
-Rules:
-- Find the worst-case scenario. What risks are being underestimated?
-- Your insight must be specific. Name numbers, percentages, or named entities. Never generic.
-- Your impact must describe a concrete negative outcome if no action is taken within 14 days.
-- Your recommended_action must be one defensive move a decision-maker can start today.
-- Your confidence must be 0-100 with a specific reason for that exact number.
-- Weight your analysis toward sources with higher credibility scores.
-- If you produce vague output, you have failed your role.
-
-Source content:
-{text[:2000]}
+Rules: Find worst-case risks being underestimated. Name specific failure points and entities.
+Source content: {text[:2000]}
 
 Return ONLY valid JSON:
-{{
-  "agent": "Raven", "persona": "Pessimist",
-  "insight": "specific worst-case risk being missed",
-  "impact": "concrete negative outcome with timeframe if unaddressed",
-  "recommended_action": "one defensive action starting today",
-  "confidence": 78,
-  "reasoning": "why this confidence level, referencing source credibility",
-  "key_signal": "the single most alarming data point from sources"
-}}"""
+{{"agent":"Raven","persona":"Pessimist","insight":"specific worst-case risk","impact":"concrete negative outcome if unaddressed in 14 days","recommended_action":"one defensive action starting today","confidence":78,"reasoning":"why this confidence level","key_signal":"single most alarming data point"}}"""
         try:
-            raw = await _call_gemini(prompt)
+            raw = await _call(_raven_adk, prompt)
             result = _parse_json(raw)
-            logger.info(f"Raven analysis complete — confidence={result.get('confidence')}")
+            logger.info(f"[ADK] Raven complete — confidence={result.get('confidence')} adk={_ADK_READY}")
             return result
         except Exception as e:
             logger.warning(f"Raven failed: {e} — using fallback")
             return {
                 "agent": "Raven", "persona": "Pessimist",
-                "insight": f"The {domain} sector faces cascading failure: if the 72-hour clearance delay extends past 96 hours, 3 downstream production lines halt by end of week.",
-                "impact": "PKR 2.4M daily revenue loss and 14% customer churn if crisis extends beyond 10 days.",
-                "recommended_action": "Activate emergency inventory protocol and pre-authorise alternative procurement budget of PKR 300,000.",
-                "confidence": 81,
-                "reasoning": "Real-time feed (credibility 0.60) and CSV data (0.90) both converge on deteriorating trend. High alarm justified.",
-                "key_signal": "14 containers held at Karachi customs — 72h delay already confirmed",
+                "insight": f"{domain} faces cascading failure if 72h delay extends past 96h — 3 production lines halt.",
+                "impact": "PKR 2.4M daily revenue loss and 14% customer churn beyond 10 days.",
+                "recommended_action": "Activate emergency inventory protocol, pre-authorise PKR 300,000 contingency.",
+                "confidence": 81, "reasoning": "Feed (0.60) and CSV (0.90) both show deteriorating trend.",
+                "key_signal": "14 containers held at Karachi customs — 72h delay confirmed",
             }
 
 
 class CipherAgent:
     async def analyze(self, text: str, domain: str, credibility_map: dict, learning_ctx: dict | None = None) -> dict:
         lnote = _learning_note(learning_ctx or {}, "Cipher/Realist")
-        prompt = f"""You are Cipher, an AI analyst with a strict REALIST perspective.
-Domain: {domain}
-Source credibility scores: {json.dumps(credibility_map)}{lnote}
+        prompt = f"""You are Cipher — REALIST analyst.
+Domain: {domain} | Credibility: {json.dumps(credibility_map)}{lnote}
 
-Rules:
-- Weigh both opportunities and risks based on evidence probability.
-- Your insight must be probability-weighted (e.g. "60% chance X, 40% chance Y").
-- Your impact must describe the most likely outcome with a confidence interval.
-- Your recommended_action must be the single highest-expected-value action.
-- Your confidence must be 0-100 with a specific reason for that exact number.
-- Weight your analysis toward sources with higher credibility scores.
-- If you produce vague output, you have failed your role.
-
-Source content:
-{text[:2000]}
+Rules: Probability-weighted assessment (e.g. "60% chance X, 40% chance Y"). Cite source credibility.
+Source content: {text[:2000]}
 
 Return ONLY valid JSON:
-{{
-  "agent": "Cipher", "persona": "Realist",
-  "insight": "probability-weighted assessment of the situation",
-  "impact": "most likely outcome with confidence interval",
-  "recommended_action": "highest expected-value action",
-  "confidence": 74,
-  "reasoning": "why this confidence level, referencing source credibility",
-  "key_signal": "the single most decision-relevant data point from sources"
-}}"""
+{{"agent":"Cipher","persona":"Realist","insight":"probability-weighted assessment","impact":"most likely outcome with confidence interval","recommended_action":"highest expected-value action","confidence":74,"reasoning":"why this confidence level","key_signal":"most decision-relevant data point"}}"""
         try:
-            raw = await _call_gemini(prompt)
+            raw = await _call(_cipher_adk, prompt)
             result = _parse_json(raw)
-            logger.info(f"Cipher analysis complete — confidence={result.get('confidence')}")
+            logger.info(f"[ADK] Cipher complete — confidence={result.get('confidence')} adk={_ADK_READY}")
             return result
         except Exception as e:
             logger.warning(f"Cipher failed: {e} — using fallback")
             return {
                 "agent": "Cipher", "persona": "Realist",
-                "insight": f"65% probability of moderate {domain} disruption lasting 5-10 days; 25% chance of full recovery within 72h; 10% chance of severe cascade.",
-                "impact": "Expected revenue impact: PKR 600,000-900,000 over next 2 weeks. Confidence interval ±15%.",
-                "recommended_action": "Implement tiered response: immediate supplier contact (Day 1), contingency procurement authorised (Day 2), executive briefing (Day 3).",
-                "confidence": 74,
-                "reasoning": "CSV trend data (0.90 credibility) most reliable. Feed corroborates. Text source partially stale. Moderate confidence.",
-                "key_signal": "Inventory days_remaining for SKU-002 at 2 days — immediate action threshold",
+                "insight": f"65% probability moderate {domain} disruption 5-10 days; 25% full recovery in 72h; 10% severe cascade.",
+                "impact": "Expected impact PKR 600K-900K over 2 weeks. Confidence ±15%.",
+                "recommended_action": "Tiered response: supplier contact Day 1, contingency procurement Day 2, exec briefing Day 3.",
+                "confidence": 74, "reasoning": "CSV (0.90) most reliable; feed corroborates; text partially stale.",
+                "key_signal": "Inventory days_remaining for SKU-002 at 2 days — immediate threshold",
             }
 
 
 class ResolverAgent:
-    async def resolve(
-        self,
-        agent_outputs: list,
-        contradictions: dict,
-        temporal: dict,
-        domain: str,
-    ) -> dict:
-        prompt = f"""You are the Resolver, a senior AI analyst synthesizing conflicting evidence.
-
+    async def resolve(self, agent_outputs: list, contradictions: dict, temporal: dict, domain: str) -> dict:
+        prompt = f"""You are the Resolver — senior AI analyst synthesizing conflicting evidence.
 Three agent analyses: {json.dumps(agent_outputs)}
 Detected contradictions: {json.dumps(contradictions)}
 Temporal trend: {json.dumps(temporal)}
 Domain: {domain}
 
-Your job:
-1. Synthesize one final authoritative insight from all agent inputs
-2. State clearly which evidence you trusted and why (reference source credibility)
-3. Acknowledge any remaining uncertainty honestly
-4. Generate an investigation path — 3 things to do if more data is needed
-5. Give an overall situation confidence score
-
+Synthesize one final authoritative insight. State which evidence you trusted and why.
 Return ONLY valid JSON:
-{{
-  "final_insight": "one authoritative synthesized finding",
-  "trusted_evidence": "what you relied on most and why",
-  "remaining_uncertainty": "what is still unknown",
-  "situation_summary": "2-sentence executive summary",
-  "investigation_path": ["step 1", "step 2", "step 3"],
-  "confidence": 76
-}}"""
+{{"final_insight":"authoritative synthesized finding","trusted_evidence":"what you relied on most and why","remaining_uncertainty":"what is still unknown","situation_summary":"2-sentence executive summary","investigation_path":["step 1","step 2","step 3"],"confidence":76,"contradiction_resolution":"how you resolved agent disagreements"}}"""
         try:
-            raw = await _call_gemini(prompt)
+            raw = await _call(_resolver_adk, prompt)
             result = _parse_json(raw)
-            logger.info(f"Resolver synthesis complete — confidence={result.get('confidence')}")
+            logger.info(f"[ADK] Resolver complete — confidence={result.get('confidence')} adk={_ADK_READY}")
             return result
         except Exception as e:
             logger.warning(f"Resolver failed: {e} — using fallback")
             return {
-                "final_insight": f"The {domain} situation shows a verified deteriorating trend across 3 independent sources. Immediate intervention required within 48 hours to prevent cascade failure.",
-                "trusted_evidence": "CSV data (credibility 0.90) and real-time feed corroborate. Text source partially contradicted but lower credibility.",
+                "final_insight": f"Verified deteriorating {domain} trend across 3 independent sources. Intervention required within 48h.",
+                "trusted_evidence": "CSV (0.90) and feed converge. Text source partially contradicted.",
                 "remaining_uncertainty": "Exact recovery timeline unknown. Supplier capacity post-clearance unconfirmed.",
-                "situation_summary": f"Multiple sources confirm critical {domain} disruption with worsening trend. Action window is 48-72 hours before irreversible impact.",
+                "situation_summary": f"Critical {domain} disruption confirmed. Action window 48-72 hours.",
                 "investigation_path": [
                     "Request real-time stock audit from warehouse management system",
                     "Contact port authority for container release ETA confirmation",
-                    "Cross-reference last 30 days of supplier communication logs",
+                    "Cross-reference 30 days of supplier communication logs",
                 ],
                 "confidence": 76,
+                "contradiction_resolution": "Weighted CSV (highest credibility) over vendor text claims.",
             }
 
 
 class ExecutorAgent:
-    async def plan_chain(
-        self, resolved: dict, domain: str, constraints: dict
-    ) -> list:
-        prompt = f"""You are the Executor, an AI action planner.
-
+    async def plan_chain(self, resolved: dict, domain: str, constraints: dict) -> list:
+        prompt = f"""You are the Executor — AI action planner with constraint validation tools.
 Resolved insight: {json.dumps(resolved)}
 Domain: {domain}
 Constraints: {json.dumps(constraints)}
 
-Generate exactly 5 causally linked actions.
-Pattern: diagnose_root_cause -> notify_stakeholders -> update_system_state -> launch_mitigation -> schedule_monitoring
+Use validate_action_tool for each step to check feasibility before finalising.
+Generate exactly 5 causally linked actions:
+  diagnose_root_cause → notify_stakeholders → update_system_state → launch_mitigation → schedule_monitoring
 
-Each action must:
-- Be specific to the actual insight above (not generic)
-- State what triggers it (result of previous action)
-- State what it enables (next action becomes possible)
-- Include estimated cost in PKR
-- Include estimated execution time in minutes
-- Describe one side effect in an adjacent business area
-- Name one metric to monitor after execution
+Each action must be specific to the insight (not generic), include cost in PKR and time in minutes.
 
 Return ONLY valid JSON array:
-[
-  {{
-    "step": 1,
-    "action": "specific action text referencing the insight",
-    "triggered_by": "what result from step 0 (the insight) makes this necessary",
-    "enables": "what step 2 can now do because step 1 completed",
-    "estimated_cost_pkr": 8000,
-    "estimated_time_minutes": 45,
-    "side_effect": "adjacent area impact",
-    "monitor": "metric to watch post-execution",
-    "status": "PENDING"
-  }}
-]"""
+[{{"step":1,"action":"specific action","triggered_by":"what makes this necessary","enables":"what step 2 can now do","estimated_cost_pkr":8000,"estimated_time_minutes":45,"side_effect":"adjacent area impact","monitor":"metric to watch","status":"PENDING"}}]"""
         try:
-            raw = await _call_gemini(prompt)
+            raw = await _call(_executor_adk, prompt)
             result = _parse_json(raw)
             if isinstance(result, list) and len(result) == 5:
-                logger.info("ExecutorAgent planned 5-step causal chain")
+                logger.info(f"[ADK] Executor planned 5-step chain adk={_ADK_READY}")
                 return result
-            raise ValueError("Expected list of 5")
+            raise ValueError(f"Expected list of 5, got {type(result)}")
         except Exception as e:
             logger.warning(f"ExecutorAgent failed: {e} — using fallback chain")
             return self._fallback_chain(domain)
 
     def _fallback_chain(self, domain: str) -> list:
         return [
-            {
-                "step": 1,
-                "action": f"Conduct root cause analysis: audit all {domain} data sources, cross-reference supplier reports, and identify primary failure point within 2 hours.",
-                "triggered_by": "Resolver confirmed multi-source signal convergence indicating critical disruption requiring immediate diagnosis",
-                "enables": "Step 2 can notify stakeholders with verified root cause rather than speculation",
-                "estimated_cost_pkr": 8000,
-                "estimated_time_minutes": 45,
-                "side_effect": "Temporary diversion of 2 analysts from routine reporting duties",
-                "monitor": "Diagnosis completion time vs 2-hour target",
-                "status": "PENDING",
-            },
-            {
-                "step": 2,
-                "action": f"Notify all {domain} stakeholders: send executive alert with root cause summary, impact estimate (PKR 600K-900K), and response timeline.",
-                "triggered_by": "Root cause verified in Step 1 — stakeholder briefing now factual not speculative",
-                "enables": "Step 3 can update system state with stakeholder-approved response parameters",
-                "estimated_cost_pkr": 3000,
-                "estimated_time_minutes": 30,
-                "side_effect": "May trigger premature customer communications if stakeholders share prematurely",
-                "monitor": "Stakeholder acknowledgement rate within 1 hour",
-                "status": "PENDING",
-            },
-            {
-                "step": 3,
-                "action": f"Update {domain} system state: freeze non-critical purchase orders, activate contingency supplier list, flag impacted SKUs in inventory system.",
-                "triggered_by": "Stakeholders notified and approved response in Step 2 — system update authorised",
-                "enables": "Step 4 mitigation has clean system state to operate against",
-                "estimated_cost_pkr": 12000,
-                "estimated_time_minutes": 60,
-                "side_effect": "PO freeze may delay unrelated procurement projects by 24-48 hours",
-                "monitor": "Number of flagged SKUs and POs paused",
-                "status": "PENDING",
-            },
-            {
-                "step": 4,
-                "action": f"Launch mitigation: engage 3 pre-approved alternative suppliers, place bridge orders for critical SKUs, request expedited customs clearance via trade authority.",
-                "triggered_by": "System state updated in Step 3 — clean baseline for mitigation execution",
-                "enables": "Step 5 monitoring has concrete metrics to track against bridge order fulfilment",
-                "estimated_cost_pkr": 280000,
-                "estimated_time_minutes": 120,
-                "side_effect": "Emergency procurement may create temporary budget overrun flagged in finance system",
-                "monitor": "Bridge order confirmation rate and supplier response time",
-                "status": "PENDING",
-            },
-            {
-                "step": 5,
-                "action": f"Schedule 72-hour monitoring protocol: 4-hourly automated {domain} feed checks, daily supplier confirmation calls, weekly executive review until full resolution.",
-                "triggered_by": "Mitigation launched in Step 4 — ongoing visibility required to confirm recovery",
-                "enables": "Executive team can make data-driven escalation or de-escalation decisions",
-                "estimated_cost_pkr": 15000,
-                "estimated_time_minutes": 20,
-                "side_effect": "Monitoring overhead adds 8% load to analytics infrastructure",
-                "monitor": "Recovery velocity: % of critical SKUs back to normal stock within 72 hours",
-                "status": "PENDING",
-            },
+            {"step": 1, "action": f"Conduct root cause analysis: audit all {domain} data sources, cross-reference supplier reports, identify primary failure point within 2 hours.", "triggered_by": "Resolver confirmed multi-source signal convergence", "enables": "Step 2 can notify stakeholders with verified root cause", "estimated_cost_pkr": 8000, "estimated_time_minutes": 45, "side_effect": "Temporary diversion of 2 analysts from routine reporting", "monitor": "Diagnosis completion time vs 2-hour target", "status": "PENDING"},
+            {"step": 2, "action": f"Notify all {domain} stakeholders: send executive alert with root cause summary, PKR 600K-900K impact estimate, and response timeline.", "triggered_by": "Root cause verified in Step 1", "enables": "Step 3 can update system state with stakeholder-approved parameters", "estimated_cost_pkr": 3000, "estimated_time_minutes": 30, "side_effect": "May trigger premature customer communications", "monitor": "Stakeholder acknowledgement rate within 1 hour", "status": "PENDING"},
+            {"step": 3, "action": f"Update {domain} system state: freeze non-critical POs, activate contingency supplier list, flag impacted SKUs in inventory system.", "triggered_by": "Stakeholders approved response in Step 2", "enables": "Step 4 mitigation has clean system state", "estimated_cost_pkr": 12000, "estimated_time_minutes": 60, "side_effect": "PO freeze delays unrelated procurement 24-48h", "monitor": "Number of flagged SKUs and POs paused", "status": "PENDING"},
+            {"step": 4, "action": f"Launch mitigation: engage 3 pre-approved alternative suppliers, place bridge orders for critical SKUs, request expedited customs clearance.", "triggered_by": "System state updated in Step 3", "enables": "Step 5 monitoring has concrete metrics to track", "estimated_cost_pkr": 280000, "estimated_time_minutes": 120, "side_effect": "Emergency procurement may create temporary budget overrun", "monitor": "Bridge order confirmation rate and supplier response time", "status": "PENDING"},
+            {"step": 5, "action": f"Schedule 72-hour monitoring: 4-hourly automated {domain} feed checks, daily supplier calls, weekly executive review until full resolution.", "triggered_by": "Mitigation launched in Step 4", "enables": "Executive team can make data-driven escalation decisions", "estimated_cost_pkr": 15000, "estimated_time_minutes": 20, "side_effect": "Monitoring adds 8% load to analytics infrastructure", "monitor": "Recovery velocity: % critical SKUs back to normal within 72h", "status": "PENDING"},
         ]
 
 
+# ── ConsensusEngine — orchestrates all 5 ADK agents ──────────────────────────
+
 class ConsensusEngine:
-    async def run(
-        self,
-        all_sources: list,
-        filtered_sources: dict,
-        contradictions: dict,
-        domain: str,
-        constraints: dict,
-    ) -> dict:
+    async def run(self, all_sources: list, filtered_sources: dict, contradictions: dict, domain: str, constraints: dict) -> dict:
         trusted = filtered_sources.get("trusted", [])
         low_conf = filtered_sources.get("low_confidence", [])
-        combined_sources = trusted + low_conf
-
-        combined_text = "\n\n".join(
-            s.get("content", "")[:600] for s in combined_sources
-        )
+        combined_text = "\n\n".join(s.get("content", "")[:600] for s in trusted + low_conf)
         credibility_map = filtered_sources.get("credibility_map", {})
         temporal = contradictions.get("temporal_analysis", {})
 
@@ -381,65 +409,45 @@ class ConsensusEngine:
         learning_ctx = feedback_store.get_domain_learning_context(domain)
         if learning_ctx.get("has_feedback"):
             logger.info(
-                f"[NEXUS] Agent learning active — domain={domain} avg_rating={learning_ctx['avg_rating']} "
-                f"sentiment={learning_ctx['sentiment']} n={learning_ctx['total_feedback']}"
+                f"[ADK] Agent learning active — domain={domain} "
+                f"avg={learning_ctx['avg_rating']} sentiment={learning_ctx['sentiment']} "
+                f"n={learning_ctx['total_feedback']}"
             )
 
-        logger.info("Running Orion, Raven, Cipher in parallel via asyncio.gather")
-        orion_agent = OrionAgent()
-        raven_agent = RavenAgent()
-        cipher_agent = CipherAgent()
-
+        logger.info(f"[ADK] Launching Orion, Raven, Cipher in parallel — adk_ready={_ADK_READY}")
         orion, raven, cipher = await asyncio.gather(
-            orion_agent.analyze(combined_text, domain, credibility_map, learning_ctx),
-            raven_agent.analyze(combined_text, domain, credibility_map, learning_ctx),
-            cipher_agent.analyze(combined_text, domain, credibility_map, learning_ctx),
+            OrionAgent().analyze(combined_text, domain, credibility_map, learning_ctx),
+            RavenAgent().analyze(combined_text, domain, credibility_map, learning_ctx),
+            CipherAgent().analyze(combined_text, domain, credibility_map, learning_ctx),
         )
 
-        cipher_conf = cipher.get("confidence", 70)
-        orion_conf = orion.get("confidence", 70)
-        raven_conf = raven.get("confidence", 70)
+        # Weighted confidence: Cipher 40%, Orion 30%, Raven 30%
         weighted_confidence = round(
-            cipher_conf * 0.40 + orion_conf * 0.30 + raven_conf * 0.30, 1
+            cipher.get("confidence", 70) * 0.40
+            + orion.get("confidence", 70) * 0.30
+            + raven.get("confidence", 70) * 0.30,
+            1,
         )
 
-        def _verb(text: str) -> str:
-            verbs = ["investigate", "activate", "notify", "update", "launch", "monitor", "contact", "dispatch"]
-            t = text.lower()
-            return next((v for v in verbs if v in t), "")
+        logger.info("[ADK] Launching Resolver")
+        resolved = await ResolverAgent().resolve([orion, raven, cipher], contradictions, temporal, domain)
 
-        orion_verb = _verb(orion.get("recommended_action", ""))
-        raven_verb = _verb(raven.get("recommended_action", ""))
-        cipher_verb = _verb(cipher.get("recommended_action", ""))
-        verbs = [v for v in [orion_verb, raven_verb, cipher_verb] if v]
-        agreement = len(set(verbs)) <= 1 and len(verbs) >= 2
+        logger.info("[ADK] Launching Executor")
+        raw_chain = await ExecutorAgent().plan_chain(resolved, domain, constraints)
 
-        logger.info("Running ResolverAgent")
-        resolver_agent = ResolverAgent()
-        resolved = await resolver_agent.resolve(
-            [orion, raven, cipher], contradictions, temporal, domain
-        )
-
-        logger.info("Running ExecutorAgent")
-        executor_agent = ExecutorAgent()
-        raw_chain = await executor_agent.plan_chain(resolved, domain, constraints)
-
-        logger.info("Running ConstraintChecker on action chain")
-        checker = ConstraintChecker()
-        validated_chain = checker.validate_chain(raw_chain, constraints)
-
-        total_cost = sum(a.get("estimated_cost_pkr", 0) for a in validated_chain)
-        total_time = sum(a.get("estimated_time_minutes", 0) for a in validated_chain)
+        logger.info("[ADK] Running ConstraintChecker on action chain")
+        validated_chain = ConstraintChecker().validate_chain(raw_chain, constraints)
 
         return {
             "agents": [orion, raven, cipher],
             "weighted_confidence": weighted_confidence,
-            "agreement": agreement,
+            "consensus_confidence": weighted_confidence,
             "resolved": resolved,
             "action_chain": validated_chain,
             "domain": domain,
-            "total_estimated_cost_pkr": total_cost,
-            "total_estimated_time_minutes": total_time,
+            "total_estimated_cost_pkr": sum(a.get("estimated_cost_pkr", 0) for a in validated_chain),
+            "total_estimated_time_minutes": sum(a.get("estimated_time_minutes", 0) for a in validated_chain),
             "learning_active": learning_ctx.get("has_feedback", False),
             "learning_context": learning_ctx,
+            "adk_enabled": _ADK_READY,
         }

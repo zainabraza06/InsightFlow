@@ -55,7 +55,7 @@ export default function TracePage() {
     reader.readAsText(file);
   }
 
-  const allTypes = trace ? [...new Set(trace.events.map((e) => e.event_type))] : [];
+  const allTypes = trace ? Array.from(new Set(trace.events.map((e) => e.event_type))) : [];
   const filtered = trace
     ? filter === "ALL"
       ? trace.events

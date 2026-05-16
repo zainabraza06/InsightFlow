@@ -15,6 +15,7 @@ from ingestion import IngestionEngine
 from contradiction import ContradictionEngine
 from constraints import ConstraintChecker, DEFAULT_CONSTRAINTS
 from agents import ConsensusEngine, ExecutorAgent
+from sdk_agents import SDKConsensusEngine
 from simulator import ActionSimulator, state_store
 from auth import register_user, login_user, get_current_user, get_user_info, update_user
 import history_store
@@ -212,20 +213,28 @@ async def analyze(body: dict):
     if not state_store.get("ingestion_result"):
         return JSONResponse({"error": "Call /ingest first"}, status_code=400)
 
-    domain = body.get("domain", state_store.get("active_domain", "Business"))
+    domain      = body.get("domain", state_store.get("active_domain", "Business"))
     constraints = body.get("constraints", DEFAULT_CONSTRAINTS)
+    flow_type   = body.get("flow_type", "custom")  # "custom" | "google_sdk"
 
     ingestion_result = state_store["ingestion_result"]
-    all_sources = ingestion_result["all_sources"]
-    filtered = ingestion_result["filtered"]
+    all_sources  = ingestion_result["all_sources"]
+    filtered     = ingestion_result["filtered"]
     contradictions = ingestion_result["contradictions"]
 
-    engine = ConsensusEngine()
+    if flow_type == "google_sdk":
+        logger.info("[NEXUS] /analyze → Google Gen AI SDK flow")
+        engine = SDKConsensusEngine()
+    else:
+        logger.info("[NEXUS] /analyze → Custom ADK-backed ConsensusEngine flow")
+        engine = ConsensusEngine()
+
     result = await engine.run(all_sources, filtered, contradictions, domain, constraints)
 
     state_store["analysis_result"] = result
-    state_store["active_domain"] = domain
-    state_store["actions_total"] = len(result.get("action_chain", []))
+    state_store["active_domain"]   = domain
+    state_store["active_flow"]     = flow_type
+    state_store["actions_total"]   = len(result.get("action_chain", []))
     state_store["actions_modified_by_constraints"] = sum(
         1 for a in result.get("action_chain", []) if a.get("was_modified")
     )
