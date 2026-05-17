@@ -1,14 +1,7 @@
-import json
 import logging
-import os
-
-import google.generativeai as genai
 
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
 logger = logging.getLogger("nexus.constraints")
-
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))
-_model = genai.GenerativeModel("gemini-2.0-flash")
 
 DEFAULT_CONSTRAINTS = {
     "max_budget_pkr": 500000,
@@ -19,64 +12,63 @@ DEFAULT_CONSTRAINTS = {
     "max_actions_in_chain": 5,
 }
 
+_URGENCY_MULTIPLIER = {"low": 1.5, "medium": 1.0, "high": 0.7, "critical": 0.4}
+
 
 class ConstraintChecker:
 
-    def check_action(self, action_text: str, step: int, constraints: dict) -> dict:
-        prompt = f"""Action (step {step}): "{action_text}"
-Constraints: {json.dumps(constraints)}
+    def check_action(self, action: dict, step: int, constraints: dict) -> dict:
+        budget = constraints.get("budget_pkr") or constraints.get("max_budget_pkr", 500_000)
+        max_hours = constraints.get("max_response_time_hours", 4)
+        staff_limit = constraints.get("max_staff") or constraints.get("available_staff", 3)
+        urgency = constraints.get("urgency", constraints.get("urgency_level", "medium"))
 
-Evaluate feasibility. Consider estimated cost, time, staff, urgency alignment.
-Also identify: does this action create any side effects in adjacent business areas?
-What should be monitored as a result of this action?
+        per_step_budget = budget / 5
+        time_mult = _URGENCY_MULTIPLIER.get(urgency, 1.0)
+        per_step_hours = (max_hours / 5) * time_mult
 
-Return ONLY valid JSON:
-{{
-  "feasible": true,
-  "estimated_cost_pkr": 15000,
-  "estimated_time_hours": 1.5,
-  "staff_required": 2,
-  "constraint_violations": [],
-  "modified_action": "feasible version of action if infeasible, else same text",
-  "feasibility_reason": "one sentence explanation",
-  "side_effect": "what unintended consequence might this create in an adjacent area",
-  "monitor": "what metric to watch after this action executes"
-}}"""
+        # Use the action's actual cost/time — check them against constraints
+        cost = action.get("estimated_cost_pkr", 0)
+        time_minutes = action.get("estimated_time_minutes", 0)
+        time_hours = round(time_minutes / 60, 2)
+        staff = action.get("staff_required", 1)
 
-        try:
-            response = _model.generate_content(prompt)
-            raw = response.text.strip()
-            raw = raw.replace("```json", "").replace("```", "").strip()
-            result = json.loads(raw)
-            logger.info(
-                f"Step {step} constraint check — feasible={result.get('feasible')} cost={result.get('estimated_cost_pkr')} PKR"
+        violations = []
+        if cost > per_step_budget:
+            violations.append(
+                f"Cost PKR {cost:,} exceeds per-step budget PKR {per_step_budget:,.0f}"
             )
-            return result
-        except Exception as e:
-            logger.warning(f"Constraint check failed for step {step}: {e} — using fallback")
-            return {
-                "feasible": True,
-                "estimated_cost_pkr": 15000,
-                "estimated_time_hours": 1.5,
-                "staff_required": 2,
-                "constraint_violations": [],
-                "modified_action": action_text,
-                "feasibility_reason": "Action within standard operating parameters",
-                "side_effect": "May temporarily increase load on adjacent reporting systems",
-                "monitor": "System response time and staff availability over next 2 hours",
-            }
+        if time_hours > per_step_hours * time_mult:
+            violations.append(
+                f"Time {time_hours:.1f}h exceeds allocation {per_step_hours * time_mult:.1f}h"
+            )
+        if staff > staff_limit:
+            violations.append(f"Staff {staff} exceeds limit {staff_limit}")
+
+        feasible = len(violations) == 0
+        action_text = action.get("action", "")
+        logger.info(f"Step {step} constraint check — feasible={feasible} cost=PKR {cost:,}")
+        return {
+            "feasible": feasible,
+            "estimated_cost_pkr": cost,
+            "estimated_time_hours": time_hours,
+            "staff_required": staff,
+            "constraint_violations": violations,
+            "modified_action": action_text,
+            "feasibility_reason": "Within constraints" if feasible else "; ".join(violations),
+            "side_effect": action.get("side_effect", "May temporarily increase load on adjacent systems"),
+            "monitor": action.get("monitor", "Completion time and resource utilisation vs plan"),
+        }
 
     def validate_chain(self, actions: list, constraints: dict) -> list:
         validated = []
         for action in actions:
             step = action.get("step", 0)
-            action_text = action.get("action", "")
-            check = self.check_action(action_text, step, constraints)
+            check = self.check_action(action, step, constraints)
 
             was_modified = not check.get("feasible", True)
             if was_modified:
-                action["action"] = check.get("modified_action", action_text)
-                logger.info(f"Step {step} action modified to meet constraints")
+                logger.info(f"Step {step} action flagged — constraints violated: {check['constraint_violations']}")
 
             action.update({
                 "feasible": check.get("feasible", True),
