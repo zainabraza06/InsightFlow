@@ -9,6 +9,13 @@ frontend-next/.env.local
 backend/users.json
 backend/history.json
 
+# Google Service Account key files (contain private keys)
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+!next*.json
+
 
 
 /.claude
