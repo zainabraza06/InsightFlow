@@ -2,13 +2,32 @@ import json
 import logging
 import os
 
-import google.generativeai as genai
+import google.genai as genai
 
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
 logger = logging.getLogger("nexus.contradiction")
 
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))
-_model = genai.GenerativeModel("gemini-2.0-flash")
+_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+_client = genai.Client(api_key=_API_KEY) if _API_KEY else None
+
+_GEMINI_MODELS = ("gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash")
+
+
+def _generate(prompt: str) -> str:
+    api_key = os.environ.get("GOOGLE_API_KEY", "")
+    client = _client or (genai.Client(api_key=api_key) if api_key else None)
+    if not client:
+        raise RuntimeError("GOOGLE_API_KEY not set")
+    for model in _GEMINI_MODELS:
+        try:
+            response = client.models.generate_content(model=model, contents=prompt)
+            text = (response.text or "").strip()
+            if text:
+                logger.info(f"[CONTRADICTION] Gemini success model={model}")
+                return text
+        except Exception as e:
+            logger.warning(f"[CONTRADICTION] model={model} failed: {e}")
+    raise RuntimeError("All Gemini models exhausted")
 
 
 class ContradictionEngine:
@@ -93,8 +112,7 @@ Return ONLY valid JSON. No markdown, no preamble:
 }}"""
 
         try:
-            response = _model.generate_content(prompt)
-            raw = response.text.strip()
+            raw = _generate(prompt)
             raw = raw.replace("```json", "").replace("```", "").strip()
             result = json.loads(raw)
             for c in result.get("contradictions", []):

@@ -5,8 +5,12 @@ Architecture:
   - Each of the 5 NEXUS agents is an ADK LlmAgent (Gemini 2.0 Flash)
   - Orion, Raven, Cipher run in parallel via asyncio.gather through ADK Runners
   - Executor uses ADK FunctionTool for real-time constraint validation
-  - Full fallback to direct google-generativeai if ADK is unavailable
   - Feedback learning context from feedback_store is injected per domain
+
+LLM call priority (per request):
+  1. OpenRouter (OPENROUTER_API_KEY) — free tier, multiple model fallbacks
+  2. Google ADK runner (google-adk) — if installed
+  3. Direct google-generativeai — always available with GOOGLE_API_KEY
 
 NOTE ON ANTIGRAVITY:
   Antigravity is the IDE used to develop this product (not a runtime dependency).
@@ -19,7 +23,8 @@ import logging
 import os
 import uuid
 
-import google.generativeai as genai
+import httpx
+import google.genai as genai
 
 from constraints import ConstraintChecker, DEFAULT_CONSTRAINTS
 import feedback_store
@@ -28,7 +33,7 @@ logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
 logger = logging.getLogger("nexus.agents")
 
 _API_KEY = os.environ.get("GOOGLE_API_KEY", "")
-genai.configure(api_key=_API_KEY)
+_genai_client = genai.Client(api_key=_API_KEY) if _API_KEY else None
 
 # ── Google ADK bootstrap ──────────────────────────────────────────────────────
 # ADK is the orchestration layer. Falls back to direct Gemini if not installed.
@@ -123,15 +128,84 @@ async def _run_via_adk(adk_agent, prompt: str) -> str:
     return final_text
 
 
+_OPENROUTER_MODELS = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "deepseek/deepseek-v4-flash:free",
+    "google/gemma-4-31b-it:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+]
+
+async def _call_openrouter(prompt: str) -> str:
+    """Call OpenRouter — tries models in order until one succeeds."""
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY not set")
+
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://nexus-ai.local",
+    }
+
+    last_err = None
+    async with httpx.AsyncClient() as client:
+        for model in _OPENROUTER_MODELS:
+            try:
+                payload = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+                resp = await client.post(url, headers=headers, json=payload, timeout=60.0)
+                resp.raise_for_status()
+                data = resp.json()
+                text = data["choices"][0]["message"]["content"].strip()
+                if text:
+                    logger.info(f"[ROUTER] OpenRouter success model={model}")
+                    return text
+            except Exception as e:
+                logger.warning(f"[ROUTER] model={model} failed: {e}")
+                last_err = e
+
+    raise RuntimeError(f"All OpenRouter models failed. Last error: {last_err}")
+
+
 async def _call_gemini_direct(prompt: str) -> str:
-    """Direct Gemini call — fallback when ADK is unavailable or errors."""
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = await asyncio.to_thread(model.generate_content, prompt)
-    return response.text.strip()
+    """Direct Gemini call — fallback when OpenRouter and ADK fail."""
+    api_key = os.environ.get("GOOGLE_API_KEY", "")
+    client = _genai_client or (genai.Client(api_key=api_key) if api_key else None)
+    if not client:
+        raise RuntimeError("GOOGLE_API_KEY not set")
+    for model_name in ("gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash"):
+        try:
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=model_name,
+                contents=prompt,
+            )
+            text = (response.text or "").strip()
+            if not text:
+                raise ValueError("empty response")
+            logger.info(f"[GEMINI] Success with model={model_name}")
+            return text
+        except Exception as e:
+            logger.warning(f"[GEMINI] model={model_name} failed: {e}")
+    raise RuntimeError("All Gemini models exhausted")
 
 
 async def _call(adk_agent, prompt: str) -> str:
-    """Try ADK first; fall back to direct Gemini."""
+    """Primary routing logic:
+       1. Try OpenRouter (first preference)
+       2. Try Google ADK
+       3. Fall back to direct Gemini
+    """
+    # 1. Try OpenRouter
+    if os.environ.get("OPENROUTER_API_KEY"):
+        try:
+            res = await _call_openrouter(prompt)
+            if res:
+                return res
+        except Exception as e:
+            logger.warning(f"[ROUTER] OpenRouter failed ({e}) — trying ADK/Gemini")
+
+    # 2. Try ADK
     if _ADK_READY and adk_agent is not None:
         try:
             result = await _run_via_adk(adk_agent, prompt)
@@ -140,6 +214,8 @@ async def _call(adk_agent, prompt: str) -> str:
         except Exception as exc:
             name = getattr(adk_agent, "name", "unknown")
             logger.warning(f"[ADK] {name} runner failed ({exc}) — falling back to direct Gemini")
+            
+    # 3. Fallback to direct Gemini
     return await _call_gemini_direct(prompt)
 
 
