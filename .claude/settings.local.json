@@ -15,7 +15,12 @@
       "Bash(git push *)",
       "Bash(python -m pytest test_challenge1.py -v -m \"not llm\")",
       "Bash(python -m pytest test_challenge1.py -v -m \"llm\" --tb=short)",
-      "Bash(python -m pytest test_challenge1.py test_pipeline.py -v -m \"not llm\" --tb=short -q)"
+      "Bash(python -m pytest test_challenge1.py test_pipeline.py -v -m \"not llm\" --tb=short -q)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('next:', p.dependencies?.next, 'scripts:', JSON.stringify\\(p.scripts\\)\\)\")",
+      "Bash(python -c \"import requirements; print\\('ok'\\)\")",
+      "Bash(Select-String \"test\")",
+      "Bash(uvicorn main:app --host 0.0.0.0 --port 8000 --reload)",
+      "PowerShell(netstat -ano)"
     ]
   }
 }

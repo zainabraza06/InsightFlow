@@ -1,7 +1,8 @@
 {
   "schema": "antigravity-trace-v1",
   "system": "NEXUS Challenge 1 — Autonomous Content-to-Action Agent",
-  "orchestrator": "Google Antigravity (Gemini 2.0 Flash + Function Calling)",
+  "development_ide": "Antigravity AI (used to build and iterate on NEXUS — not a runtime dependency)",
+  "orchestrator": "Google ADK (Gemini 2.0 Flash + Function Calling)",
   "session_id": "AG-NEXUS-1778859913",
   "scenario": "Supply Chain Crisis — Karachi Port Congestion",
   "started_at": "2026-05-15T15:45:13.638760",

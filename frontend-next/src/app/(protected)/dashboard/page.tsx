@@ -40,7 +40,7 @@ export default function DashboardPage() {
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null);
   const [executeResult, setExecuteResult] = useState<ExecuteResult | null>(null);
   const [whatIfResult, setWhatIfResult] = useState<WhatIfResult | null>(null);
-  const [isWhatIfLoading, setIsWhatIfLoading] = useState(false);
+  const [activeWhatIfPreset, setActiveWhatIfPreset] = useState<string | null>(null);
 
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -114,16 +114,16 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleWhatIf(mod: Record<string, unknown>) {
+  async function handleWhatIf(mod: Record<string, unknown>, label: string) {
     setWhatIfResult(null);
-    setIsWhatIfLoading(true);
+    setActiveWhatIfPreset(label);
     try {
       const res = await whatIf(mod);
       setWhatIfResult(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "What-if failed");
     } finally {
-      setIsWhatIfLoading(false);
+      setActiveWhatIfPreset(null);
     }
   }
 
@@ -331,17 +331,27 @@ export default function DashboardPage() {
               <Card className="p-4">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">What-If Analysis</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {WHATIF_PRESETS.map((p) => (
-                    <button
-                      key={p.label}
-                      onClick={() => handleWhatIf(p.mod)}
-                      disabled={isWhatIfLoading}
-                      className="px-3 py-2 rounded-lg border border-nexus-border text-xs text-gray-400 hover:border-nexus-cyan/50 hover:text-nexus-cyan transition-all text-left flex items-center gap-2"
-                    >
-                      {isWhatIfLoading ? <span className="w-3 h-3 border-2 border-nexus-cyan border-t-transparent rounded-full animate-spin" /> : null}
-                      {p.label}
-                    </button>
-                  ))}
+                  {WHATIF_PRESETS.map((p) => {
+                    const isLoading = activeWhatIfPreset === p.label;
+                    const isAnyLoading = activeWhatIfPreset !== null;
+                    return (
+                      <button
+                        key={p.label}
+                        onClick={() => handleWhatIf(p.mod, p.label)}
+                        disabled={isAnyLoading}
+                        className={`px-3 py-2 rounded-lg border text-xs transition-all text-left flex items-center gap-2 ${
+                          isLoading
+                            ? "border-nexus-cyan bg-nexus-cyan/10 text-nexus-cyan shadow-[0_0_12px_rgba(6,182,212,0.15)] pointer-events-none"
+                            : "border-nexus-border text-gray-400 hover:border-nexus-cyan/50 hover:text-nexus-cyan"
+                        }`}
+                      >
+                        {isLoading ? (
+                          <span className="w-3 h-3 border-2 border-nexus-cyan border-t-transparent rounded-full animate-spin" />
+                        ) : null}
+                        {p.label}
+                      </button>
+                    );
+                  })}
                 </div>
                 {whatIfResult && (
                   <div className="mt-3 pt-3 border-t border-nexus-border space-y-1 text-xs font-mono">
