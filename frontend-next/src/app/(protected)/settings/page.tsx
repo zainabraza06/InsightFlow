@@ -91,7 +91,7 @@ export default function SettingsPage() {
             <h2 className="text-sm font-semibold text-white mb-4">System</h2>
             <div className="space-y-2 text-sm font-mono text-gray-400">
               {[
-                ["Version", "NEXUS 2.0"],
+                ["Version", "InsightFlow 2.0"],
                 ["Challenge", "Challenge 1 — Autonomous Content-to-Action Agent"],
                 ["Agents", "Orion · Raven · Cipher · Resolver · Executor"],
                 ["Model", "Gemini 2.0 Flash"],

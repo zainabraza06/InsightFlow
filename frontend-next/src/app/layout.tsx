@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NEXUS — Autonomous Intelligence Engine",
+  title: "InsightFlow — Autonomous Intelligence Engine",
   description: "Autonomous Content-to-Action Agent with 5-agent consensus, contradiction detection, and real-world integrations.",
 };
 

@@ -1,5 +1,5 @@
-name: nexus_mobile
-description: NEXUS — Autonomous Content-to-Action Agent
+name: insightflow_mobile
+description: InsightFlow — Autonomous Content-to-Action Intelligence
 publish_to: 'none'
 version: 1.0.0+1
 

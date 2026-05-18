@@ -1,5 +1,5 @@
 """
-NEXUS Agent System — powered by Google Agent Development Kit (ADK)
+InsightFlow Agent System — powered by Google Agent Development Kit (ADK)
 
 Architecture:
   - Each of the 5 NEXUS agents is an ADK LlmAgent (Gemini 2.0 Flash)

@@ -117,6 +117,17 @@ class ActionSimulator:
         state_store["after_state"] = after
         state_store["status"] = "completed"
         state_store["last_updated"] = datetime.utcnow().isoformat()
+
+        # Update Google Sheets with the final completed system state to ensure no ambiguity
+        final_state = {
+            "status": "completed",
+            "actions_completed": state_store.get("actions_completed", 5),
+            "total_cost_pkr": state_store.get("total_cost_pkr", 0),
+            "risk_level": "REDUCED",
+            "domain": domain,
+        }
+        step3_update_system_state(domain, final_state)
+
         self.add_log(
             f"[NEXUS] Chain complete — cost PKR {state_store['total_cost_pkr']} — "
             f"latency {state_store['total_latency_ms']}ms"

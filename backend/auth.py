@@ -51,9 +51,9 @@ def register_user(name: str, email: str, password: str) -> dict:
     if key in users:
         raise HTTPException(status_code=400, detail="Email already registered")
     salt = secrets.token_hex(16)
-    users[key] = {"name": name.strip(), "email": key, "salt": salt, "password": _hash(password, salt)}
+    users[key] = {"name": name.strip(), "email": key, "salt": salt, "password": _hash(password, salt), "is_admin": False}
     _save_users(users)
-    return {"token": _make_token(key), "user": {"name": name.strip(), "email": key}}
+    return {"token": _make_token(key), "user": {"name": name.strip(), "email": key, "is_admin": False}}
 
 
 def login_user(email: str, password: str) -> dict:
@@ -62,7 +62,7 @@ def login_user(email: str, password: str) -> dict:
     u = users.get(key)
     if not u or _hash(password, u["salt"]) != u["password"]:
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    return {"token": _make_token(key), "user": {"name": u["name"], "email": key}}
+    return {"token": _make_token(key), "user": {"name": u["name"], "email": key, "is_admin": u.get("is_admin", False)}}
 
 
 def get_current_user(creds: HTTPAuthorizationCredentials = Security(bearer)) -> str:
@@ -77,7 +77,36 @@ def get_current_user(creds: HTTPAuthorizationCredentials = Security(bearer)) -> 
 def get_user_info(email: str) -> dict:
     users = _load_users()
     u = users.get(email, {})
-    return {"name": u.get("name", ""), "email": email}
+    return {"name": u.get("name", ""), "email": email, "is_admin": u.get("is_admin", False)}
+
+
+def is_admin_user(email: str) -> bool:
+    users = _load_users()
+    return users.get(email, {}).get("is_admin", False)
+
+
+def seed_admin():
+    users = _load_users()
+    admin_email = "admin@nexus.ai"
+    if admin_email not in users:
+        salt = secrets.token_hex(16)
+        users[admin_email] = {
+            "name": "NEXUS Admin",
+            "email": admin_email,
+            "salt": salt,
+            "password": _hash("admin12345", salt),
+            "is_admin": True
+        }
+        _save_users(users)
+        print("[AUTH] Admin user admin@nexus.ai seeded successfully")
+
+
+def get_all_users_list() -> list:
+    users = _load_users()
+    return [
+        {"name": u.get("name", ""), "email": email, "is_admin": u.get("is_admin", False)}
+        for email, u in users.items()
+    ]
 
 
 def update_user(email: str, name: str | None = None, password: str | None = None) -> dict:

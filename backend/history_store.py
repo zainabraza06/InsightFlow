@@ -69,3 +69,25 @@ def delete_entry(user_email: str, entry_id: str) -> bool:
     data[user_email] = new_entries
     _save(data)
     return True
+
+
+def get_all_entries() -> list:
+    data = _load()
+    all_records = []
+    for email, entries in data.items():
+        for e in entries:
+            # Create a shallow copy and include the user email
+            all_records.append({
+                "user_email": email,
+                "id": e["id"],
+                "timestamp": e["timestamp"],
+                "domain": e.get("domain", ""),
+                "topic": e.get("topic", ""),
+                "sources_processed": e.get("sources_processed", 0),
+                "contradictions_found": e.get("contradictions_found", 0),
+                "actions_total": e.get("actions_total", 0),
+                "total_cost_pkr": e.get("total_cost_pkr", 0),
+                "status": e.get("status", "completed"),
+            })
+    all_records.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return all_records

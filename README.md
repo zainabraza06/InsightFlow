@@ -1,287 +1,280 @@
-# NEXUS — Autonomous Content-to-Action Agent
-## Hackathon Challenge 1 Submission
+# InsightFlow — Autonomous Content-to-Action Intelligence
+
+> **Hackathon Challenge 1** — Autonomous Content-to-Action Agent  
+> Developed in **Antigravity AI IDE** · Runtime powered by **Google ADK + Gemini 2.0 Flash**
+
+InsightFlow transforms unstructured multi-source intelligence into an executed, constraint-validated action chain — using a 5-agent debate system that detects contradictions, resolves uncertainty, and triggers real-world integrations automatically.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      InsightFlow v2.0                           │
+├──────────────┬──────────────────────────┬───────────────────────┤
+│  Next.js 14  │    FastAPI Backend        │   Flutter Mobile      │
+│  (Web UI)    │    (Python 3.14)          │   (iOS / Android)     │
+└──────┬───────┴──────────┬───────────────┴───────────┬───────────┘
+       └──────────────────┼────────────────────────────┘
+                          │  REST API (localhost:8000)
+          ┌───────────────▼───────────────────────────┐
+          │              Agent Pipeline                │
+          │  ┌──────┐  ┌──────┐  ┌──────┐            │
+          │  │Orion │  │Raven │  │Cipher│  (parallel) │
+          │  │Optim.│  │Pess. │  │Real. │             │
+          │  └──┬───┘  └──┬───┘  └──┬───┘            │
+          │     └─────────┴──────────┘                │
+          │              ┌──────▼──────┐              │
+          │              │  Resolver   │  (synthesis)  │
+          │              └──────┬──────┘              │
+          │              ┌──────▼──────┐              │
+          │              │  Executor   │  (chain)      │
+          │              └─────────────┘              │
+          └───────────────────────────────────────────┘
+```
+
+### LLM Call Priority (per request)
+1. **OpenRouter** (free tier) — `google/gemini-2.0-flash-exp:free` → `meta-llama/llama-3.1-8b-instruct:free` → fallbacks
+2. **Google ADK** — if `google-adk` package is installed
+3. **Direct Gemini** — `gemini-1.5-flash` → `gemini-2.0-flash-lite` → `gemini-2.0-flash`
+
+---
+
+## Features
+
+### 5-Agent Debate System
+| Agent | Role | Persona |
+|-------|------|---------|
+| **Orion** | Optimist Analyst | Finds hidden opportunities, first-mover advantages |
+| **Raven** | Pessimist Analyst | Identifies worst-case risks and failure points |
+| **Cipher** | Realist Analyst | Probability-weighted assessment with confidence intervals |
+| **Resolver** | Synthesis Engine | Reconciles agent conflicts into one authoritative insight |
+| **Executor** | Action Planner | Generates 5-step causal chain with constraint validation |
+
+### Intelligence Pipeline (7 Phases)
+1. **Content Ingestion** — PDF, text, CSV, URL, live RSS feed (5 source types)
+2. **Credibility Scoring** — Each source scored 0–1, low-credibility sources filtered
+3. **Contradiction Detection** — Cross-source conflict identification with severity rating
+4. **Temporal Analysis** — Trend direction (improving/worsening/stable) from time-series data
+5. **Agent Debate** — Orion + Raven + Cipher run in parallel via `asyncio.gather`
+6. **Constraint Validation** — Budget / time / staff / urgency checked per action step
+7. **Chain Execution** — Real integrations: email (SMTP) → Google Sheets → Slack webhook
+
+### Agent Learning Loop
+- Users rate analyses 1–5 (emoji feedback widget on web and mobile)
+- Last 15 ratings per domain stored in `feedback.json`
+- Negative feedback → agents instructed to "cite sources, name specific entities"
+- Positive feedback → agents told to "maintain this reasoning style"
+- Learning context injected into every Gemini prompt for that domain
+
+### Real-World Integrations
+| Step | Integration | Trigger |
+|------|------------|---------|
+| Step 2 | Gmail SMTP | Stakeholder alert email |
+| Step 3 | Google Sheets | System state dashboard update |
+| Step 4 | Slack Webhook | Mitigation alert notification |
+
+### What-If Analysis
+Counterfactual constraint re-runs — modify budget/urgency/staff and see how the action chain changes without re-running agents.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Web Frontend** | Next.js 14, TypeScript, Tailwind CSS, App Router |
+| **Mobile** | Flutter 3.x, Dart |
+| **Backend** | FastAPI, Python 3.14, uvicorn |
+| **AI Runtime** | Google ADK, google-generativeai (Gemini 2.0 Flash) |
+| **Secondary LLM** | OpenRouter (free tier) |
+| **Auth** | JWT (PyJWT), SHA-256+salt password hashing |
+| **Storage** | JSON flat files (users, history, feedback) |
+| **Development IDE** | Antigravity AI |
 
 ---
 
 ## Project Structure
 
 ```
-nexus/
-├── PLAN.md                          ← Antigravity workplan + reasoning trace
-├── README.md
-├── backend/                         ← FastAPI Python backend (port 8000)
+insightflow/
+├── backend/                    # FastAPI backend
+│   ├── main.py                 # API endpoints (auth, ingest, analyze, execute, history, feedback)
+│   ├── agents.py               # 5-agent system + Google ADK integration
+│   ├── ingestion.py            # Multi-source ingestion engine
+│   ├── contradiction.py        # Cross-source contradiction detector
+│   ├── constraints.py          # Budget/time/staff constraint checker
+│   ├── simulator.py            # Action chain executor with failure recovery
+│   ├── auth.py                 # JWT auth + SHA-256 hashing
+│   ├── history_store.py        # Per-user analysis history (max 50)
+│   ├── feedback_store.py       # Domain feedback + learning context
 │   ├── requirements.txt
-│   ├── main.py                      ← 10 REST endpoints
-│   ├── ingestion.py                 ← 5-source processor (PDF/URL/CSV/text/feed)
-│   ├── contradiction.py             ← Credibility scoring + conflict detection
-│   ├── constraints.py               ← Budget / time / staff checker
-│   ├── agents.py                    ← 5 AI agents + ConsensusEngine (custom flow)
-│   ├── sdk_agents.py                ← SDKConsensusEngine (google-genai native flow)
-│   ├── simulator.py                 ← Chain execution + failure recovery
-│   ├── real_actions.py              ← Real email / Google Sheets / Slack webhook
-│   ├── auth.py                      ← JWT register / login
-│   ├── history_store.py             ← Per-user analysis history
-│   ├── feedback_store.py            ← Agent learning from user ratings
-│   └── test_challenge1.py           ← 80-test Challenge 1 requirement suite
-├── frontend-next/                   ← Next.js 14 web app (port 3000)
-│   ├── src/app/                     ← App Router pages
-│   │   ├── (auth)/login             ← Login page
-│   │   ├── (auth)/register          ← Register page
-│   │   └── (protected)/
-│   │       ├── dashboard/           ← Main pipeline UI
-│   │       ├── analyze/             ← Analysis results
-│   │       ├── history/             ← Past analyses
-│   │       ├── trace/               ← Agent execution trace viewer
-│   │       └── settings/            ← User settings
-│   └── src/components/analysis/
-│       ├── AgentDebate.tsx          ← Orion / Raven / Cipher cards
-│       ├── ActionChain.tsx          ← 5-step causal chain
-│       ├── DisagreementMeter.tsx    ← Agent confidence divergence
-│       └── RiskTimeline.tsx         ← Temporal risk visualization
-└── nexus_mobile/                    ← Flutter mobile app (Android APK)
-    ├── pubspec.yaml
-    └── lib/
-        ├── main.dart
-        ├── config.dart              ← Backend URL config
-        └── screens/
-            ├── login_screen.dart
-            ├── register_screen.dart
-            ├── input_screen.dart    ← Source ingestion
-            ├── debate_screen.dart   ← Agent analysis
-            ├── chain_screen.dart    ← Action chain
-            ├── execution_screen.dart← Simulation results
-            ├── history_screen.dart
-            └── settings_screen.dart
+│   └── .env                    # API keys (never commit)
+│
+├── frontend-next/              # Next.js 14 web app
+│   └── src/
+│       ├── app/
+│       │   ├── (auth)/         # Login, Register
+│       │   └── (protected)/    # Dashboard, Analyze, History, Trace, Settings
+│       ├── components/
+│       │   ├── analysis/       # AgentDebate, ActionChain, FeedbackWidget, RiskTimeline
+│       │   ├── layout/         # Sidebar, Navbar
+│       │   └── ui/             # Button, Card, Badge, Input, LoadingSpinner
+│       └── lib/                # api.ts, auth.ts
+│
+├── nexus_mobile/               # Flutter mobile app
+│   └── lib/
+│       ├── screens/            # Input, Debate, Chain, Execution, History, HistoryDetail, Settings
+│       └── services/           # ApiService, AuthService
+│
+└── antigravity_trace.json      # Execution trace (load in Trace Viewer)
 ```
 
 ---
 
-## Architecture Overview
+## Quick Start
 
-5-layer pipeline: **Input → Intelligence → Agents → Simulation → Outcome**
+### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- Flutter 3.x (for mobile)
+- Gemini API key from [aistudio.google.com](https://aistudio.google.com/app/apikey)
 
-```
-[Sources: text / CSV / PDF / URL / feed]
-        ↓
-  IngestionEngine          credibility_base per source type
-        ↓
-  ContradictionEngine      score, filter noise, detect conflicts, temporal trend
-        ↓
-  ┌─────────────────────────────────┐
-  │  Orion (Optimist)  asyncio      │
-  │  Raven  (Pessimist) .gather()   │  ← parallel, mirrors Antigravity Manager View
-  │  Cipher (Realist)               │
-  └───────────────┬─────────────────┘
-                  ↓
-           ResolverAgent       synthesizes 3 perspectives into final insight
-                  ↓
-           ExecutorAgent       plans 5-step causal action chain (validate_action tool)
-                  ↓
-         ConstraintChecker     flags over-budget / over-time / over-staff actions
-                  ↓
-         ActionSimulator       executes chain: email + Sheets + Slack + failure recovery
-                  ↓
-  [Before/After state · Execution log · /export-trace artifact]
-```
-
-Two execution flows selectable via `POST /analyze { "flow_type": "custom" | "google_sdk" }`:
-- **custom** — ADK-backed `ConsensusEngine` with OpenRouter → Gemini fallback chain
-- **google_sdk** — `SDKConsensusEngine` using `google-genai` native function calling
-
----
-
-## Data Source Credibility
-
-| Source | Format | Base score | Modifier |
-|---|---|---|---|
-| CSV report | Rows → summary | 0.90 | +0.05 if date column present |
-| PDF document | Binary → text | 0.85 | +0.10 type bonus |
-| URL fetch | HTML → stripped | 0.70 | −0.20 if stale terms |
-| Text / article | String | 0.65 | −0.15 if noise terms (rumor, breaking) |
-| Mock live feed | Hardcoded string | 0.60 | — |
-| Failed source | Any | 0.00 | Excluded automatically |
-
-Threshold: sources below **0.30** are excluded before agents run.
-
----
-
-## Tools and APIs
-
-| Tool / API | Purpose |
-|---|---|
-| **FastAPI** | Backend REST API |
-| **google-genai** | Gemini 2.5 Flash Lite — all LLM calls (contradiction detection, 5 agents) |
-| **google-genai native tools** | SDK-native function calling for `validate_action` in Executor |
-| **PyMuPDF** | PDF text extraction |
-| **httpx** | Async HTTP — URL fetching + OpenRouter calls |
-| **asyncio.gather** | Parallel Orion / Raven / Cipher execution |
-| **gspread + google-auth** | Real Google Sheets dashboard update (Step 3) |
-| **smtplib** | Real HTML stakeholder email (Step 2) |
-| **Slack webhook** | Real Slack mitigation alert (Step 4) |
-| **Next.js 14** | Web frontend (App Router) |
-| **Flutter** | Mobile APK (Android) |
-| **JWT / pyjwt** | Auth tokens |
-
----
-
-## How Google Antigravity Is Used
-
-- `PLAN.md` is the live Antigravity workplan — ISO-timestamped decisions and rationale at each stage
-- All 5 agents are orchestrated like Antigravity Manager View tasks:
-  - **Orion + Raven + Cipher** run via `asyncio.gather` (parallel execution, mirrors Antigravity parallel task model)
-  - **Resolver** synthesizes — sequential dependency, like an Antigravity blocking task
-  - **Executor** plans with tool calls — maps to Antigravity tool-use execution
-- `validate_action` is a native SDK function tool called by the Executor before finalizing each action step
-- `POST /analyze { "flow_type": "google_sdk" }` uses the `google-genai` SDK's native function-calling loop
-- `GET /export-trace` produces `nexus_antigravity_trace.json` — the full agent log, state snapshot, and decision flow submitted as the Antigravity trace artifact
-
----
-
-## Setup
-
-### Backend (required)
+### 1. Backend
 
 ```bash
 cd backend
 pip install -r requirements.txt
-
-# Copy and fill in credentials
-cp .env.example .env   # or create .env manually (see Environment Variables below)
-
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Web Frontend
+Create `backend/.env`:
+```env
+GOOGLE_API_KEY=your_gemini_key
+OPENROUTER_API_KEY=your_openrouter_key   # recommended — reduces Gemini quota usage
+
+# Optional real-world integrations
+SMTP_USER=your@gmail.com
+SMTP_PASS=xxxx xxxx xxxx xxxx            # Gmail App Password (requires 2FA)
+NOTIFY_EMAIL=recipient@example.com
+GOOGLE_SHEET_ID=your_sheet_id
+GOOGLE_SA_JSON={"type":"service_account",...}  # paste as single line
+SLACK_WEBHOOK_URL=https://hooks.slack.com/...
+```
+
+```bash
+uvicorn main:app --reload
+# API: http://localhost:8000
+# Swagger docs: http://localhost:8000/docs
+```
+
+### 2. Web Frontend
 
 ```bash
 cd frontend-next
 npm install
-npm run dev       # development → http://localhost:3000
-# or
-npm run build && npm start   # production
 ```
 
-> `.env.local` is already configured: `NEXT_PUBLIC_API_URL=http://localhost:8000`
+Create `frontend-next/.env.local`:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-### Mobile APK
+```bash
+npm run dev
+# App: http://localhost:3000
+```
+
+### 3. Mobile
 
 ```bash
 cd nexus_mobile
 flutter pub get
-flutter build apk --release
-# APK → nexus_mobile/build/app/outputs/flutter-apk/app-release.apk
-
-# For emulator: backend URL is 10.0.2.2:8000 (already set in config.dart)
-# For physical device: edit nexus_mobile/lib/config.dart → set your LAN IP
 ```
+
+Edit `lib/config.dart` — set your backend URL:
+```dart
+// Android emulator
+static const String baseUrl = 'http://10.0.2.2:8000';
+// iOS simulator / physical device on same network
+// static const String baseUrl = 'http://192.168.x.x:8000';
+```
+
+```bash
+flutter run
+```
+
+---
+
+## API Reference
+
+### Auth
+| Method | Endpoint | Body | Description |
+|--------|----------|------|-------------|
+| POST | `/auth/register` | `{name, email, password}` | Create account |
+| POST | `/auth/login` | `{email, password}` | Sign in → `{token, user}` |
+| GET | `/auth/me` | — | Current user (JWT required) |
+| PUT | `/auth/me` | `{name?, password?}` | Update profile (JWT required) |
+
+### Analysis Pipeline
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/ingest` | Ingest sources (multipart: text, url, file, csv_data, domain, topic) |
+| POST | `/analyze` | Run 5-agent consensus `{domain, constraints}` |
+| POST | `/execute` | Execute action chain `{domain}` |
+| POST | `/what-if` | Counterfactual analysis `{modifications}` |
+| GET | `/state` | Current system state snapshot |
+| GET | `/export-trace` | Download execution trace JSON |
+
+### History & Feedback
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/history` | Save analysis entry (JWT required) |
+| GET | `/history` | List user history summaries (JWT required) |
+| GET | `/history/{id}` | Full detail with agents + chain (JWT required) |
+| DELETE | `/history/{id}` | Delete entry (JWT required) |
+| POST | `/feedback` | Submit rating + comment `{rating, domain, comment, analysis_id}` |
+| GET | `/feedback/stats` | Global domain statistics |
+| GET | `/feedback/domain/{domain}` | Domain learning context |
 
 ---
 
 ## Environment Variables
 
-Create `backend/.env` with the following:
-
-```env
-# Gemini (required)
-GOOGLE_API_KEY=your_google_ai_studio_key
-
-# OpenRouter (optional — used before Gemini as primary LLM)
-OPENROUTER_API_KEY=your_openrouter_key
-
-# Step 2 — Real email notification
-SMTP_USER=your_gmail@gmail.com
-SMTP_PASS=your_16char_app_password
-NOTIFY_EMAIL=recipient@example.com
-
-# Step 3 — Real Google Sheets dashboard
-GOOGLE_SHEET_ID=your_sheet_id_from_url
-GOOGLE_SA_JSON={"type":"service_account",...}   # full service account JSON, one line
-
-# Step 4 — Real Slack alert
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
-```
-
-If any integration variable is missing, that step falls back to a rich simulation — **the demo never crashes**.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_API_KEY` | ✅ Yes | Gemini API key |
+| `OPENROUTER_API_KEY` | Recommended | OpenRouter free tier (reduces Gemini quota usage) |
+| `SMTP_USER` | Optional | Gmail address for stakeholder alerts |
+| `SMTP_PASS` | Optional | Gmail App Password (16 chars, requires 2FA) |
+| `NOTIFY_EMAIL` | Optional | Email to receive stakeholder alerts |
+| `GOOGLE_SHEET_ID` | Optional | Google Sheet for system state dashboard |
+| `GOOGLE_SA_JSON` | Optional | Service account JSON (single line, newlines as `\n`) |
+| `SLACK_WEBHOOK_URL` | Optional | Slack incoming webhook for mitigation alerts |
 
 ---
 
-## API Endpoints
+## Antigravity IDE
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/health` | System status + agent list |
-| `POST` | `/ingest` | Ingest sources (form-data: text, csv_data, url, file, include_feed) |
-| `POST` | `/analyze` | Run 5-agent pipeline (`flow_type`: custom \| google_sdk) |
-| `POST` | `/execute` | Simulate action chain (email + Sheets + Slack) |
-| `GET` | `/state` | Current pipeline state |
-| `GET` | `/logs` | Execution log entries |
-| `GET` | `/baseline-comparison` | NEXUS vs simple heuristic comparison |
-| `POST` | `/what-if` | Re-run Executor with modified constraints |
-| `GET` | `/export-trace` | Download full Antigravity trace JSON |
-| `POST` | `/auth/register` · `/auth/login` | JWT authentication |
+InsightFlow was built and iterated inside the **Antigravity AI IDE**. The runtime product is fully standalone — Antigravity is not a dependency. The `antigravity_trace.json` file documents the full development workplan and 23 execution events. Load it in the **Trace Viewer** (`/trace`) to inspect agent phases, tool calls, and decision reasoning.
 
 ---
 
-## Robustness Scenarios
+## Hackathon Checklist
 
-All triggered automatically by the **Supply Chain seed**:
-
-| Scenario | What happens |
-|---|---|
-| URL fetch failure | Source excluded, credibility scored 0.0, pipeline continues |
-| Step 3 failure (40% random) | Google Sheets write fails → logged → retry → `RECOVERED` |
-| Low-credibility source | Score < 0.30 → excluded before agents run |
-| Contradiction detected | Two sources conflict → Resolver invoked → contradiction_resolution in output |
-| Over-budget action | ConstraintChecker sets `was_modified: True`, adds `constraint_violations` |
-| All LLM models fail | Realistic hardcoded fallback responses — demo never returns an error |
-
----
-
-## Running the Tests
-
-```bash
-cd backend
-
-# Fast tests (no LLM, ~4 min)
-pytest test_challenge1.py test_pipeline.py -v -m "not llm"
-
-# Full suite including LLM calls (~25 min)
-pytest test_challenge1.py test_pipeline.py -v
-
-# Just the end-to-end pipeline trace (with printed output)
-pytest test_challenge1.py::TestFullPipelineScenario -v -s
-```
-
-**126 tests total · 125 pass · 1 skip** (Google Sheets real-write test — requires `gspread` + service account)
-
----
-
-## Demo Video Script (Supply Chain, 3–5 min)
-
-1. Start backend (`uvicorn main:app --port 8000`) + frontend (`npm run dev`)
-2. Register / login on the web app
-3. On **Dashboard** — paste the Supply Chain scenario text, upload the CSV, toggle Live Feed on
-4. Click **Ingest** — show credibility matrix, contradiction card, temporal trend
-5. Click **Analyze** — watch Orion / Raven / Cipher cards populate with agent insights
-6. Show **DisagreementMeter** — confidence divergence between agents
-7. Show **Resolver** synthesis with trusted evidence and investigation path
-8. Show **ActionChain** — 5 causally-linked steps with cost / time / constraint status
-9. Click **Execute** — Step 3 may flash red → amber RECOVERED
-10. Show **Before / After** state diff
-11. Open **Trace** page — show full execution log
-12. Click **Export Trace** → `nexus_antigravity_trace.json` downloaded
-13. Say: *"This JSON is our Antigravity submission artifact — every agent decision, every tool call, before and after state, full audit trail."*
-
----
-
-## Assumptions
-
-1. Gemini free tier (`gemini-2.5-flash-lite`) is sufficient for demo volume — 20 RPD limit; full suite stays under it with spacing
-2. All scenario data is fictional and Pakistan-context inspired
-3. Step 3 failure is simulated probabilistically (40%) — not every run triggers it
-4. In-memory `state_store` resets on server restart — by design for demo simplicity
-5. Constraints are hardcoded defaults; production would load from config
-
-## Privacy
-
-No real personal data. All scenarios fictional. No persistent storage beyond auth `users.json`.
+- [x] Multi-source ingestion (PDF, text, CSV, URL, RSS feed)
+- [x] Credibility scoring and noise filtering
+- [x] Contradiction detection with severity levels
+- [x] Temporal trend analysis
+- [x] 5-agent parallel debate (Orion, Raven, Cipher, Resolver, Executor)
+- [x] Constraint validation (budget, time, staff, urgency)
+- [x] 5-step causal action chain
+- [x] Real integrations (Gmail SMTP, Google Sheets, Slack Webhook)
+- [x] What-if counterfactual analysis
+- [x] Agent learning loop from user feedback
+- [x] Web frontend (Next.js 14 + TypeScript)
+- [x] Mobile app (Flutter — iOS & Android)
+- [x] JWT authentication + history per user
+- [x] Antigravity trace viewer
+- [x] Google ADK integration with graceful fallback
+- [x] OpenRouter as primary LLM (Gemini as fallback)

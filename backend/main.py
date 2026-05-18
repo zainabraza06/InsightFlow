@@ -17,14 +17,17 @@ from constraints import ConstraintChecker, DEFAULT_CONSTRAINTS
 from agents import ConsensusEngine, ExecutorAgent
 from sdk_agents import SDKConsensusEngine
 from simulator import ActionSimulator, state_store
-from auth import register_user, login_user, get_current_user, get_user_info, update_user
+from auth import register_user, login_user, get_current_user, get_user_info, update_user, is_admin_user, get_all_users_list, seed_admin
 import history_store
 import feedback_store
+
+# Automatically seed the admin user on boot
+seed_admin()
 
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
 logger = logging.getLogger("nexus.main")
 
-app = FastAPI(title="NEXUS", version="2.0")
+app = FastAPI(title="InsightFlow", version="2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -369,6 +372,62 @@ def export_trace():
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=nexus_antigravity_trace.json"},
     )
+
+
+# ── Admin endpoints ───────────────────────────────────────────────
+
+from fastapi import Depends
+
+def check_admin(user: str = Depends(get_current_user)):
+    if not is_admin_user(user):
+        raise HTTPException(status_code=403, detail="Admin privilege required")
+    return user
+
+@app.get("/admin/users")
+def admin_users(user: str = Depends(check_admin)):
+    return JSONResponse(get_all_users_list())
+
+@app.get("/admin/history")
+def admin_history(user: str = Depends(check_admin)):
+    return JSONResponse(history_store.get_all_entries())
+
+@app.get("/admin/feedback")
+def admin_feedback(user: str = Depends(check_admin)):
+    return JSONResponse(feedback_store.get_all_feedback_entries())
+
+@app.get("/admin/dashboard-stats")
+def admin_dashboard_stats(user: str = Depends(check_admin)):
+    users = get_all_users_list()
+    history = history_store.get_all_entries()
+    feedbacks = feedback_store.get_all_feedback_entries()
+    
+    total_users = len(users)
+    total_runs = len(history)
+    total_feedback = len(feedbacks)
+    
+    avg_rating = 0.0
+    if total_feedback > 0:
+        avg_rating = round(sum(f.get("rating", 0) for f in feedbacks) / total_feedback, 2)
+        
+    total_cost_spent = sum(h.get("total_cost_pkr", 0) for h in history)
+    
+    # Calculate domain stats
+    domain_stats = {}
+    for h in history:
+        domain = h.get("domain", "Unknown")
+        if domain not in domain_stats:
+            domain_stats[domain] = {"runs": 0, "cost": 0}
+        domain_stats[domain]["runs"] += 1
+        domain_stats[domain]["cost"] += h.get("total_cost_pkr", 0)
+        
+    return JSONResponse({
+        "total_users": total_users,
+        "total_runs": total_runs,
+        "total_feedback": total_feedback,
+        "avg_rating": avg_rating,
+        "total_cost_spent": total_cost_spent,
+        "domain_stats": domain_stats,
+    })
 
 
 # Mount frontend LAST so API routes take precedence

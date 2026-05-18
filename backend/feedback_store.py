@@ -101,3 +101,8 @@ def get_global_stats() -> dict:
 def get_user_feedback(user_email: str) -> list:
     data = _load()
     return [e for e in data["entries"] if e.get("user_email") == user_email]
+
+
+def get_all_feedback_entries() -> list:
+    data = _load()
+    return data.get("entries", [])
