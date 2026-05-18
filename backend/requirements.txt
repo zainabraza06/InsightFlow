@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-google-generativeai
 google-genai
 pymupdf
 python-multipart
@@ -9,4 +8,5 @@ gspread
 google-auth
 python-dotenv
 pyjwt
-google-adk
+pytest
+httpx[asyncio]
