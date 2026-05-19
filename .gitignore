@@ -5,6 +5,7 @@ yarn-error.log
 .next/
 frontend-next/.env.local
 
+/.claude/
 # User data (generated at runtime)
 backend/users.json
 backend/history.json
