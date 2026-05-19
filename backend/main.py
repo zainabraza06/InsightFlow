@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import FastAPI, Form, UploadFile, File
+from fastapi import FastAPI, Form, UploadFile, File, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -375,8 +375,6 @@ def export_trace():
 
 
 # ── Admin endpoints ───────────────────────────────────────────────
-
-from fastapi import Depends
 
 def check_admin(user: str = Depends(get_current_user)):
     if not is_admin_user(user):

@@ -220,8 +220,24 @@ async def _call(adk_agent, prompt: str) -> str:
 
 
 def _parse_json(raw: str) -> dict | list:
-    raw = raw.replace("```json", "").replace("```", "").strip()
-    return json.loads(raw)
+    cleaned = raw.replace("```json", "").replace("```", "").strip()
+    # Fast path: clean JSON string
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+    # Slow path: model wrapped output in prose — find and decode the first
+    # complete JSON object or array, ignoring surrounding text
+    decoder = json.JSONDecoder()
+    for ch in ('{', '['):
+        idx = cleaned.find(ch)
+        if idx != -1:
+            try:
+                value, _ = decoder.raw_decode(cleaned, idx)
+                return value
+            except json.JSONDecodeError:
+                pass
+    raise ValueError(f"No valid JSON in LLM response: {cleaned[:200]}")
 
 
 # ── Learning note injected into prompts from user feedback ───────────────────
