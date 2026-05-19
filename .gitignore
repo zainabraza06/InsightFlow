@@ -6,6 +6,13 @@ yarn-error.log
 frontend-next/.env.local
 
 /.claude/
+# Test and dev artifacts
+backend/test_*.py
+backend/conftest.py
+antigravity_trace*.json
+antigravity_trace*.zip
+nexus_orchestrator.py
+
 # User data (generated at runtime)
 backend/users.json
 backend/history.json
