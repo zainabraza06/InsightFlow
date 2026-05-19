@@ -68,7 +68,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               const Text('Create Account', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              const Text('Join NEXUS Intelligence Platform', style: TextStyle(color: Color(0xFF6b7280), fontSize: 14)),
+              const Text('Join InsightFlow Intelligence Platform', style: TextStyle(color: Color(0xFF6b7280), fontSize: 14)),
               const SizedBox(height: 32),
 
               _field('Full Name', _nameCtrl),

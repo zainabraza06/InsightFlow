@@ -50,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 48),
-              const Text('NEXUS', style: TextStyle(color: Color(0xFF00d4ff), fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 6)),
+              const Text('InsightFlow', style: TextStyle(color: Color(0xFF00d4ff), fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 3)),
               const SizedBox(height: 4),
               const Text('Sign in to your account', style: TextStyle(color: Color(0xFF6b7280), fontSize: 14)),
               const SizedBox(height: 40),

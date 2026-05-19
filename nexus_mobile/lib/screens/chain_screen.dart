@@ -65,14 +65,14 @@ class _ChainScreenState extends State<ChainScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF111118),
-        title: const Text('Baseline vs NEXUS', style: TextStyle(color: Color(0xFF4f8ef7))),
+        title: const Text('Baseline vs InsightFlow', style: TextStyle(color: Color(0xFF4f8ef7))),
         content: SingleChildScrollView(
           child: DataTable(
             headingRowColor: WidgetStateProperty.all(const Color(0xFF0d0d14)),
             columns: const [
               DataColumn(label: Text('Capability', style: TextStyle(fontSize: 11, color: Colors.white38))),
               DataColumn(label: Text('Simple', style: TextStyle(fontSize: 11, color: Colors.white38))),
-              DataColumn(label: Text('NEXUS', style: TextStyle(fontSize: 11, color: Colors.white38))),
+              DataColumn(label: Text('InsightFlow', style: TextStyle(fontSize: 11, color: Colors.white38))),
             ],
             rows: rows
                 .map((r) => DataRow(cells: [
@@ -148,22 +148,6 @@ class _ChainScreenState extends State<ChainScreen> {
           TextButton(
             onPressed: _loadBaseline,
             child: const Text('Compare vs Non-Agentic Baseline', style: TextStyle(color: Color(0xFF4f8ef7))),
-          ),
-          const SizedBox(height: 8),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Trace ready — download from web dashboard or include in submission'),
-              )),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4f8ef7),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text('Export Antigravity Trace', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
           ),
           const SizedBox(height: 16),
 
@@ -370,7 +354,7 @@ class _FeedbackSectionState extends State<_FeedbackSection> {
                 border: Border.all(color: const Color(0x339b59b6)),
               ),
               child: Text(
-                '[NEXUS LEARNING] $_learningMsg',
+                '[INSIGHTFLOW LEARNING] $_learningMsg',
                 style: const TextStyle(color: Color(0xFF9b59b6), fontSize: 10, fontFamily: 'monospace'),
               ),
             ),
