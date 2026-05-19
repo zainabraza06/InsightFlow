@@ -9,10 +9,24 @@ import google.genai as genai
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
 logger = logging.getLogger("nexus.contradiction")
 
-_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
-_client = genai.Client(api_key=_API_KEY) if _API_KEY else None
+_API_KEY       = os.environ.get("GOOGLE_API_KEY", "")
+_GCP_PROJECT   = os.environ.get("GCP_PROJECT", "insightflow-496519")
+_GCP_LOCATION  = os.environ.get("GCP_LOCATION", "us-central1")
+_VERTEX_ENABLED = False
 
-_GEMINI_MODELS = ("gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash")
+def _make_client():
+    global _VERTEX_ENABLED
+    if _GCP_PROJECT and os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        try:
+            c = genai.Client(vertexai=True, project=_GCP_PROJECT, location=_GCP_LOCATION)
+            _VERTEX_ENABLED = True
+            return c
+        except Exception:
+            pass
+    return genai.Client(api_key=_API_KEY) if _API_KEY else None
+
+_client = _make_client()
+_GEMINI_MODELS = ("gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash")
 _OPENROUTER_MODELS = [
     "meta-llama/llama-3.3-70b-instruct:free",
     "deepseek/deepseek-v4-flash:free",
@@ -49,19 +63,22 @@ async def _generate_via_openrouter(prompt: str) -> str:
 
 
 def _generate_gemini(prompt: str) -> str:
-    api_key = os.environ.get("GOOGLE_API_KEY", "")
-    client = _client or (genai.Client(api_key=api_key) if api_key else None)
+    client = _client
     if not client:
-        raise RuntimeError("GOOGLE_API_KEY not set")
+        api_key = os.environ.get("GOOGLE_API_KEY", "")
+        client = genai.Client(api_key=api_key) if api_key else None
+    if not client:
+        raise RuntimeError("No Gemini client — set GCP_PROJECT or GOOGLE_API_KEY")
+    backend = "Vertex AI" if _VERTEX_ENABLED else "AI Studio"
     for model in _GEMINI_MODELS:
         try:
             response = client.models.generate_content(model=model, contents=prompt)
             text = (response.text or "").strip()
             if text:
-                logger.info(f"[CONTRADICTION] Gemini success model={model}")
+                logger.info(f"[CONTRADICTION] {backend} success model={model}")
                 return text
         except Exception as e:
-            logger.warning(f"[CONTRADICTION] model={model} failed: {e}")
+            logger.warning(f"[CONTRADICTION] {backend} model={model} failed: {e}")
     raise RuntimeError("All Gemini models exhausted")
 
 

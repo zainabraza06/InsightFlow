@@ -1,26 +1,21 @@
 """
 InsightFlow Agent System — powered by Google Agent Development Kit (ADK)
 
-Architecture:
-  - Each of the 5 NEXUS agents is an ADK LlmAgent (Gemini 2.0 Flash)
-  - Orion, Raven, Cipher run in parallel via asyncio.gather through ADK Runners
-  - Executor uses ADK FunctionTool for real-time constraint validation
-  - Feedback learning context from feedback_store is injected per domain
-
 LLM call priority (per request):
   1. OpenRouter (OPENROUTER_API_KEY) — free tier, multiple model fallbacks
-  2. Google ADK runner (google-adk) — if installed
-  3. Direct google-generativeai — always available with GOOGLE_API_KEY
+  2. Vertex AI Gemini (GCP_PROJECT set) — billed to GCP credits, high quota
+  3. Google ADK runner (google-adk) — if installed
+  4. Direct Gemini AI Studio (GOOGLE_API_KEY) — free tier fallback
 
 NOTE ON ANTIGRAVITY:
   Antigravity is the IDE used to develop this product (not a runtime dependency).
-  NEXUS runs standalone — only requires GOOGLE_API_KEY and standard Python packages.
 """
 
 import asyncio
 import json
 import logging
 import os
+import tempfile
 import uuid
 
 import httpx
@@ -32,8 +27,41 @@ import feedback_store
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
 logger = logging.getLogger("nexus.agents")
 
-_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
-_genai_client = genai.Client(api_key=_API_KEY) if _API_KEY else None
+# ── Credential bootstrap ───────────────────────────────────────────────────────
+# If GOOGLE_SA_JSON is set, write it to a temp file so ADC picks it up.
+# This covers both local dev and Cloud Run (which uses the attached SA directly).
+_SA_JSON = os.environ.get("GOOGLE_SA_JSON", "")
+if _SA_JSON and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+    try:
+        _sa_data = json.loads(_SA_JSON)
+        _tf = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        json.dump(_sa_data, _tf)
+        _tf.flush()
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _tf.name
+        logger.info(f"[CREDS] Service account loaded from GOOGLE_SA_JSON → {_tf.name}")
+    except Exception as _e:
+        logger.warning(f"[CREDS] Could not write SA JSON: {_e}")
+
+_GCP_PROJECT  = os.environ.get("GCP_PROJECT", "insightflow-496519")
+_GCP_LOCATION = os.environ.get("GCP_LOCATION", "us-central1")
+_API_KEY      = os.environ.get("GOOGLE_API_KEY", "")
+
+# Build Vertex AI client if project is set (uses ADC / service account)
+# Fall back to AI Studio API key client
+def _make_genai_client():
+    if _GCP_PROJECT and os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        try:
+            c = genai.Client(vertexai=True, project=_GCP_PROJECT, location=_GCP_LOCATION)
+            logger.info(f"[GENAI] Vertex AI client — project={_GCP_PROJECT} location={_GCP_LOCATION}")
+            return c, True
+        except Exception as e:
+            logger.warning(f"[GENAI] Vertex AI init failed ({e}) — falling back to AI Studio key")
+    if _API_KEY:
+        logger.info("[GENAI] AI Studio client (free tier)")
+        return genai.Client(api_key=_API_KEY), False
+    return None, False
+
+_genai_client, _VERTEX_ENABLED = _make_genai_client()
 
 # ── Google ADK bootstrap ──────────────────────────────────────────────────────
 # ADK is the orchestration layer. Falls back to direct Gemini if not installed.
@@ -176,12 +204,15 @@ async def _call_openrouter(prompt: str) -> str:
 
 
 async def _call_gemini_direct(prompt: str) -> str:
-    """Direct Gemini call — fallback when OpenRouter and ADK fail."""
-    api_key = os.environ.get("GOOGLE_API_KEY", "")
-    client = _genai_client or (genai.Client(api_key=api_key) if api_key else None)
+    """Gemini call via Vertex AI (credits) or AI Studio (free tier fallback)."""
+    client = _genai_client
     if not client:
-        raise RuntimeError("GOOGLE_API_KEY not set")
-    for model_name in ("gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash"):
+        api_key = os.environ.get("GOOGLE_API_KEY", "")
+        client = genai.Client(api_key=api_key) if api_key else None
+    if not client:
+        raise RuntimeError("No Gemini client available — set GCP_PROJECT or GOOGLE_API_KEY")
+    backend = "Vertex AI" if _VERTEX_ENABLED else "AI Studio"
+    for model_name in ("gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"):
         try:
             response = await asyncio.to_thread(
                 client.models.generate_content,
@@ -191,10 +222,10 @@ async def _call_gemini_direct(prompt: str) -> str:
             text = (response.text or "").strip()
             if not text:
                 raise ValueError("empty response")
-            logger.info(f"[GEMINI] Success with model={model_name}")
+            logger.info(f"[GEMINI] {backend} success model={model_name}")
             return text
         except Exception as e:
-            logger.warning(f"[GEMINI] model={model_name} failed: {e}")
+            logger.warning(f"[GEMINI] {backend} model={model_name} failed: {e}")
     raise RuntimeError("All Gemini models exhausted")
 
 
