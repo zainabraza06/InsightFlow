@@ -69,11 +69,10 @@ def _domain_entries(domain: str) -> list:
         docs = (
             _firestore().collection("feedback")
             .where("domain", "==", domain)
-            .order_by("timestamp", direction="DESCENDING")
-            .limit(LEARNING_WINDOW)
             .stream()
         )
-        return [d.to_dict() for d in docs]
+        entries = sorted([d.to_dict() for d in docs], key=lambda x: x.get("timestamp", ""), reverse=True)
+        return entries[:LEARNING_WINDOW]
     else:
         return [e for e in _load()["entries"] if e.get("domain") == domain][:LEARNING_WINDOW]
 
@@ -96,8 +95,8 @@ def get_domain_learning_context(domain: str) -> dict:
 
 def get_global_stats() -> dict:
     if _FIRESTORE:
-        docs = _firestore().collection("feedback").order_by("timestamp", direction="DESCENDING").limit(500).stream()
-        entries = [d.to_dict() for d in docs]
+        docs = _firestore().collection("feedback").limit(500).stream()
+        entries = sorted([d.to_dict() for d in docs], key=lambda x: x.get("timestamp", ""), reverse=True)
     else:
         entries = _load()["entries"]
     if not entries:
@@ -128,8 +127,8 @@ def get_user_feedback(user_email: str) -> list:
 
 def get_all_feedback_entries() -> list:
     if _FIRESTORE:
-        docs = _firestore().collection("feedback").order_by("timestamp", direction="DESCENDING").limit(500).stream()
-        return [d.to_dict() for d in docs]
+        docs = _firestore().collection("feedback").limit(500).stream()
+        return sorted([d.to_dict() for d in docs], key=lambda x: x.get("timestamp", ""), reverse=True)
     else:
         return _load().get("entries", [])
 

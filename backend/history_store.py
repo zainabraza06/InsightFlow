@@ -46,15 +46,14 @@ def save_entry(user_email: str, entry: dict) -> str:
     }
     if _FIRESTORE:
         _firestore().collection("history").document(eid).set(record)
-        # Enforce MAX_PER_USER — delete oldest if over limit
-        old = (
+        # Enforce MAX_PER_USER — fetch all, sort in Python, delete oldest
+        all_docs = (
             _firestore().collection("history")
             .where("user_email", "==", user_email)
-            .order_by("timestamp", direction="DESCENDING")
-            .offset(MAX_PER_USER)
             .stream()
         )
-        for doc in old:
+        sorted_docs = sorted(all_docs, key=lambda d: d.to_dict().get("timestamp", ""), reverse=True)
+        for doc in sorted_docs[MAX_PER_USER:]:
             doc.reference.delete()
     else:
         data = _load()
@@ -82,11 +81,10 @@ def get_entries(user_email: str) -> list:
         docs = (
             _firestore().collection("history")
             .where("user_email", "==", user_email)
-            .order_by("timestamp", direction="DESCENDING")
-            .limit(MAX_PER_USER)
             .stream()
         )
-        return [_summary(d.to_dict()) for d in docs]
+        entries = sorted([d.to_dict() for d in docs], key=lambda x: x.get("timestamp", ""), reverse=True)
+        return [_summary(e) for e in entries[:MAX_PER_USER]]
     else:
         return [_summary(e) for e in _load().get(user_email, [])]
 
@@ -126,13 +124,8 @@ def delete_entry(user_email: str, entry_id: str) -> bool:
 
 def get_all_entries() -> list:
     if _FIRESTORE:
-        docs = (
-            _firestore().collection("history")
-            .order_by("timestamp", direction="DESCENDING")
-            .limit(500)
-            .stream()
-        )
-        return [d.to_dict() for d in docs]
+        docs = _firestore().collection("history").limit(500).stream()
+        return sorted([d.to_dict() for d in docs], key=lambda x: x.get("timestamp", ""), reverse=True)
     else:
         data = _load()
         all_records = []
