@@ -174,8 +174,23 @@ Return ONLY valid JSON. No markdown, no preamble:
 
         try:
             raw = await _generate(prompt)
-            raw = raw.replace("```json", "").replace("```", "").strip()
-            result = json.loads(raw)
+            cleaned = raw.replace("```json", "").replace("```", "").strip()
+            decoder = json.JSONDecoder()
+            try:
+                result = json.loads(cleaned)
+            except json.JSONDecodeError:
+                # Model wrapped JSON in prose — find first { or [
+                result = None
+                for ch in ('{', '['):
+                    idx = cleaned.find(ch)
+                    if idx != -1:
+                        try:
+                            result, _ = decoder.raw_decode(cleaned, idx)
+                            break
+                        except json.JSONDecodeError:
+                            pass
+                if result is None:
+                    raise ValueError("No valid JSON in contradiction response")
             for c in result.get("contradictions", []):
                 logger.info(
                     f"Contradiction detected: {c.get('source_a_type')} vs {c.get('source_b_type')} — {c.get('conflict_reason')}. Resolver agent invoked."
