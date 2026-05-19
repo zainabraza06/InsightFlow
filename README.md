@@ -17,6 +17,12 @@ Built for Hackathon Challenge 1 · Google ADK + Gemini · OpenRouter · Groq · 
 
 ---
 
+## Problem Statement
+
+Decision-makers in fast-moving environments (supply chain, operations, finance) receive information from many sources at once — CSV exports, news feeds, PDFs, field reports — that often contradict each other. There is no automated way to ingest all of it, detect conflicts, weigh source credibility, and generate a validated, executable action plan within minutes.
+
+InsightFlow solves this end-to-end: it ingests unstructured multi-source data, runs a 5-agent AI debate to surface opportunities and risks, resolves contradictions, validates every action against real budget/time/staff constraints, and triggers live integrations — with no human in the loop.
+
 ## What It Does
 
 InsightFlow ingests unstructured data from multiple sources (PDF, CSV, URL, text, live feed), runs a 5-agent parallel debate, resolves contradictions, validates every action against real-world constraints, and triggers live integrations — fully autonomous end-to-end.
@@ -46,6 +52,91 @@ Sources (PDF / CSV / URL / Text / Feed)
 ```
 
 **LLM routing (every call):** OpenRouter → Groq → Vertex AI Gemini → AI Studio Gemini
+
+---
+
+## Mock vs Real APIs
+
+A key design principle: every integration that can be real, is real. Simulated steps are clearly documented.
+
+| Step | API / Service | Real or Mock | Details |
+|------|--------------|:------------:|---------|
+| LLM calls (all agents) | OpenRouter API | **Real** | HTTP to `openrouter.ai/api/v1/chat/completions` |
+| LLM fallback 1 | Groq API | **Real** | HTTP to `api.groq.com/openai/v1/chat/completions` |
+| LLM fallback 2 | Vertex AI Gemini | **Real** | GCP `google-genai` SDK, project `insightflow-496519` |
+| LLM fallback 3 | Gemini AI Studio | **Real** | `google-genai` SDK with API key |
+| Step 2 — Email alert | Gmail SMTP | **Real** | `smtplib` → port 587 TLS, real email delivered |
+| Step 3 — Dashboard | Google Sheets | **Real** | `gspread` + Service Account, real row appended |
+| Step 4 — Alert | Slack Webhook | **Real** | HTTP POST to workspace, real message posted |
+| Step 1 — Diagnosis | Root cause analysis | Simulated | Structured text from Resolver output |
+| Step 5 — Monitoring | Schedule setup | Simulated | Structured monitoring plan returned as JSON |
+| Live feed ingestion | Supply chain signals | Simulated | Domain-keyed hardcoded signals (demo seed data) |
+| PDF ingestion | PyMuPDF | **Real** | Full text extraction from uploaded PDF bytes |
+| URL ingestion | httpx | **Real** | Live HTTP fetch, HTML stripped |
+| CSV ingestion | csv.DictReader | **Real** | Parsed with temporal column auto-detection |
+
+---
+
+## Agent System Design
+
+### Google ADK Integration
+
+The backend uses **Google Agent Development Kit (ADK)** as a structured agent runtime. Each of the five agents is wrapped in an ADK `Agent` object with a defined system prompt and tool set. ADK handles prompt formatting, model selection, and structured output parsing. If ADK is not installed, the system gracefully falls back to direct Gemini API calls — no code changes required.
+
+ADK agents are defined in `backend/agents.py` and used for the `flow_type="custom"` pipeline (default). An alternative `flow_type="google_sdk"` route in `sdk_agents.py` uses the Gen AI SDK natively for comparison.
+
+### The Five Agents
+
+**Orion — Optimist Analyst**
+- Persona: Identifies hidden opportunities, first-mover advantages, and positive signals buried in crisis data
+- Input: Combined source text (600 chars/source) + domain + credibility map + learning context from past feedback
+- Output JSON: `{insight, impact, recommended_action, confidence, key_signal}`
+- Weight in consensus: 30%
+
+**Raven — Pessimist Analyst**
+- Persona: Surfaces worst-case risks, cascade failure points, and scenarios other analysts miss
+- Input: Same as Orion
+- Output JSON: `{insight, impact, recommended_action, confidence, key_signal}`
+- Weight in consensus: 30%
+
+**Cipher — Realist Analyst**
+- Persona: Probability-weighted assessment with confidence intervals. Refuses to speculate without evidence.
+- Input: Same as Orion
+- Output JSON: `{insight, impact, recommended_action, confidence, key_signal}`
+- Weight in consensus: 40% (highest — ground truth anchor)
+
+**Resolver — Synthesis Engine**
+- Input: All three analyst outputs + contradiction report + temporal analysis
+- Role: Reconciles disagreements, ranks evidence by credibility, produces a single authoritative finding
+- Output JSON: `{final_insight, trusted_evidence, situation_summary, contradiction_resolution, recommended_priority}`
+
+**Executor — Action Planner**
+- Input: Resolver output + user constraints (budget, time, staff, urgency)
+- Role: Produces a causal 5-step action chain where each step has a `triggered_by` and `enables` link
+- Output JSON: `[{step, action, triggered_by, enables, estimated_cost_pkr, estimated_time_minutes}]`
+
+### Parallel Execution
+
+Orion, Raven, and Cipher run concurrently via `asyncio.gather` with a 1.2s stagger between each to prevent simultaneous rate limiting on free-tier APIs. Resolver and Executor run sequentially after all three analysts complete.
+
+### LLM Routing (every agent call)
+
+```
+1. OpenRouter (primary, free tier)
+   └─ llama-3.3-70b-instruct → deepseek-v4-flash → gemma-4-31b → llama-3.2-3b
+   └─ 429 rate limit → retry once with 3s backoff, then next provider
+
+2. Groq (secondary, free tier, 5-10x faster)
+   └─ llama-3.3-70b-versatile → llama-3.1-70b-versatile → mixtral-8x7b → llama-3.1-8b
+
+3. Vertex AI Gemini (GCP credits)
+   └─ gemini-2.0-flash → gemini-2.0-flash-lite → gemini-1.5-flash
+
+4. AI Studio Gemini (API key fallback)
+   └─ Same model cascade as Vertex AI
+```
+
+JSON robustness: all agent responses parsed with `JSONDecoder.raw_decode()` which finds the first valid JSON object at any position in the response — handles models that wrap JSON in prose ("Here is the analysis: {...}").
 
 ---
 
