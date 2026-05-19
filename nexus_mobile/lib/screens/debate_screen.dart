@@ -5,8 +5,9 @@ import 'execution_screen.dart';
 class DebateScreen extends StatefulWidget {
   final Map<String, dynamic> ingestData;
   final String domain;
+  final Map<String, dynamic>? constraints;
 
-  const DebateScreen({super.key, required this.ingestData, required this.domain});
+  const DebateScreen({super.key, required this.ingestData, required this.domain, this.constraints});
 
   @override
   State<DebateScreen> createState() => _DebateScreenState();
@@ -29,7 +30,7 @@ class _DebateScreenState extends State<DebateScreen> {
   Future<void> _analyze() async {
     setState(() => _analyzing = true);
     try {
-      final data = await ApiService().analyze(widget.domain);
+      final data = await ApiService().analyze(widget.domain, constraints: widget.constraints);
       if (mounted) {
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => ExecutionScreen(consensusData: data, domain: widget.domain),

@@ -26,10 +26,12 @@ class ApiService {
     return jsonDecode(body) as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> analyze(String domain) async {
+  Future<Map<String, dynamic>> analyze(String domain, {Map<String, dynamic>? constraints}) async {
     final headers = await AuthService.authHeaders();
+    final body = <String, dynamic>{'domain': domain};
+    if (constraints != null) body['constraints'] = constraints;
     final res = await http.post(Uri.parse('${AppConfig.baseUrl}/analyze'),
-        headers: headers, body: jsonEncode({'domain': domain}));
+        headers: headers, body: jsonEncode(body));
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 

@@ -7,21 +7,21 @@ const _seeds = {
     'text': 'Regional Q3 sales report: Lahore division shows 25% decline in orders. Field reps report customer churn to competitor offering 15% lower pricing on electronics.',
     'csv': 'month,orders,revenue_pkr,returns\nJuly,1200,2400000,45\nAugust,980,1960000,67\nSeptember,900,1800000,89',
     'url': '',
-    'topic': 'sales',
+    'topic': 'Sales decline Lahore Q3',
     'domain': 'Business',
   },
   'fuel': {
     'text': 'Breaking: Government announces 18% increase in petroleum prices effective immediately. Diesel up PKR 22/litre. Transport associations warn of 30% logistics cost surge.',
     'csv': 'date,diesel_pkr,transport_index,delivery_complaints\n2026-05-01,278,100,12\n2026-05-08,290,108,28\n2026-05-15,312,119,54',
     'url': '',
-    'topic': 'fuel',
+    'topic': 'Fuel price hike logistics impact',
     'domain': 'Logistics',
   },
   'supply': {
     'text': 'Port congestion at Karachi delays shipments average 12 days. Three major electronics suppliers halting production due to power rationing. Warehouse manager email says stock is fine for 6 weeks.',
     'csv': 'sku,stock_units,days_remaining,supplier_status,last_updated\nSKU-001,450,12,delayed,2026-05-10\nSKU-002,80,2,critical,2026-05-14\nSKU-003,1200,31,normal,2026-04-28',
     'url': '',
-    'topic': 'supply',
+    'topic': 'Supply chain disruption Karachi port',
     'domain': 'Logistics',
   },
 };
@@ -34,26 +34,56 @@ class InputScreen extends StatefulWidget {
 }
 
 class _InputScreenState extends State<InputScreen> {
-  final _textCtrl = TextEditingController();
-  final _urlCtrl = TextEditingController();
-  final _csvCtrl = TextEditingController();
-  String _domain = 'Business';
-  String _topic = '';
-  bool _includeFeed = true;
-  bool _loading = false;
+  final _textCtrl  = TextEditingController();
+  final _urlCtrl   = TextEditingController();
+  final _csvCtrl   = TextEditingController();
+  final _topicCtrl = TextEditingController();
+
+  String _domain      = 'Business';
+  bool   _includeFeed = true;
+  bool   _loading     = false;
+  bool   _showConstraints = false;
+
+  // Constraints
+  String _budget    = '500000';
+  String _timeHours = '4';
+  String _staff     = '3';
+  String _urgency   = 'medium';
+
+  @override
+  void dispose() {
+    _textCtrl.dispose();
+    _urlCtrl.dispose();
+    _csvCtrl.dispose();
+    _topicCtrl.dispose();
+    super.dispose();
+  }
 
   void _loadSeed(String key) {
     final s = _seeds[key]!;
     setState(() {
-      _textCtrl.text = s['text']!;
-      _urlCtrl.text = s['url']!;
-      _csvCtrl.text = s['csv']!;
-      _topic = s['topic']!;
-      _domain = s['domain']!;
+      _textCtrl.text  = s['text']!;
+      _urlCtrl.text   = s['url']!;
+      _csvCtrl.text   = s['csv']!;
+      _topicCtrl.text = s['topic']!;
+      _domain         = s['domain']!;
     });
   }
 
+  Map<String, dynamic> get _constraints => {
+    'budget_pkr': int.tryParse(_budget) ?? 500000,
+    'max_response_time_hours': int.tryParse(_timeHours) ?? 4,
+    'available_staff': int.tryParse(_staff) ?? 3,
+    'urgency': _urgency,
+  };
+
   Future<void> _ingest() async {
+    if (_textCtrl.text.trim().isEmpty && _urlCtrl.text.trim().isEmpty && _csvCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter at least one source (text, URL, or CSV)')),
+      );
+      return;
+    }
     setState(() => _loading = true);
     showDialog(
       context: context,
@@ -69,17 +99,21 @@ class _InputScreenState extends State<InputScreen> {
     );
     try {
       final data = await ApiService().ingest(
-        text: _textCtrl.text,
-        url: _urlCtrl.text,
-        csvData: _csvCtrl.text,
-        domain: _domain,
-        topic: _topic,
+        text:        _textCtrl.text,
+        url:         _urlCtrl.text,
+        csvData:     _csvCtrl.text,
+        domain:      _domain,
+        topic:       _topicCtrl.text,
         includeFeed: _includeFeed,
       );
       if (mounted) {
         Navigator.of(context).pop();
         Navigator.push(context, MaterialPageRoute(
-          builder: (_) => DebateScreen(ingestData: data, domain: _domain),
+          builder: (_) => DebateScreen(
+            ingestData:  data,
+            domain:      _domain,
+            constraints: _constraints,
+          ),
         ));
       }
     } catch (e) {
@@ -94,6 +128,7 @@ class _InputScreenState extends State<InputScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0a0a0f),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0d0d14),
         title: const Column(
@@ -105,46 +140,68 @@ class _InputScreenState extends State<InputScreen> {
         ),
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        // Domain
         _label('Domain'),
         DropdownButtonFormField<String>(
           value: _domain,
           dropdownColor: const Color(0xFF111118),
+          style: const TextStyle(color: Colors.white, fontSize: 13),
           decoration: _inputDecoration(),
-          items: ['Business', 'Policy', 'Logistics', 'Finance', 'News']
+          items: ['Business', 'Policy', 'Logistics', 'Finance', 'News', 'Supply Chain', 'Healthcare']
               .map((d) => DropdownMenuItem(value: d, child: Text(d)))
               .toList(),
           onChanged: (v) => setState(() => _domain = v!),
         ),
         const SizedBox(height: 12),
+
+        // Topic
+        _label('Topic / Title'),
+        TextFormField(
+          controller: _topicCtrl,
+          style: const TextStyle(fontSize: 13, color: Colors.white),
+          decoration: _inputDecoration(hint: 'Brief topic description for this analysis'),
+        ),
+        const SizedBox(height: 12),
+
+        // Quick seeds
         Wrap(spacing: 8, children: [
-          _seedChip('📉 Sales Drop', () => _loadSeed('sales')),
-          _seedChip('⛽ Fuel Hike', () => _loadSeed('fuel')),
-          _seedChip('🏭 Supply Chain', () => _loadSeed('supply')),
+          _seedChip('📉 Sales Drop',    () => _loadSeed('sales')),
+          _seedChip('⛽ Fuel Hike',     () => _loadSeed('fuel')),
+          _seedChip('🏭 Supply Chain',  () => _loadSeed('supply')),
         ]),
         const SizedBox(height: 12),
+
+        // Text source
         _label('Text / Article / Report'),
         TextFormField(
           controller: _textCtrl,
           maxLines: 4,
-          style: const TextStyle(fontSize: 13),
+          style: const TextStyle(fontSize: 13, color: Colors.white),
           decoration: _inputDecoration(hint: 'Paste text, news article, or report...'),
         ),
         const SizedBox(height: 12),
+
+        // URL source
         _label('URL (optional)'),
         TextFormField(
           controller: _urlCtrl,
-          decoration: _inputDecoration(hint: 'Article URL to fetch (optional)'),
-          style: const TextStyle(fontSize: 13),
+          style: const TextStyle(fontSize: 13, color: Colors.white),
+          decoration: _inputDecoration(hint: 'Article URL to fetch and analyse'),
+          keyboardType: TextInputType.url,
         ),
         const SizedBox(height: 12),
+
+        // CSV source
         _label('CSV Data (optional)'),
         TextFormField(
           controller: _csvCtrl,
           maxLines: 3,
-          style: const TextStyle(fontSize: 13),
+          style: const TextStyle(fontSize: 13, color: Colors.white),
           decoration: _inputDecoration(hint: 'Paste CSV — include date/month column for temporal analysis'),
         ),
         const SizedBox(height: 8),
+
+        // Live feed toggle
         SwitchListTile(
           value: _includeFeed,
           onChanged: (v) => setState(() => _includeFeed = v),
@@ -152,7 +209,50 @@ class _InputScreenState extends State<InputScreen> {
           activeColor: const Color(0xFF4f8ef7),
           contentPadding: EdgeInsets.zero,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 4),
+
+        // Constraints toggle
+        GestureDetector(
+          onTap: () => setState(() => _showConstraints = !_showConstraints),
+          child: Row(children: [
+            const Text('Constraints', style: TextStyle(fontSize: 12, color: Colors.white38)),
+            const SizedBox(width: 6),
+            Icon(_showConstraints ? Icons.expand_less : Icons.expand_more,
+                size: 16, color: Colors.white38),
+          ]),
+        ),
+
+        if (_showConstraints) ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: _constraintField('Budget (PKR)', _budget,
+                (v) => setState(() => _budget = v), TextInputType.number)),
+            const SizedBox(width: 10),
+            Expanded(child: _constraintField('Max Hours', _timeHours,
+                (v) => setState(() => _timeHours = v), TextInputType.number)),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: _constraintField('Staff', _staff,
+                (v) => setState(() => _staff = v), TextInputType.number)),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _label('Urgency'),
+              DropdownButtonFormField<String>(
+                value: _urgency,
+                dropdownColor: const Color(0xFF111118),
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+                decoration: _inputDecoration(),
+                items: ['low', 'medium', 'high', 'critical']
+                    .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                    .toList(),
+                onChanged: (v) => setState(() => _urgency = v!),
+              ),
+            ])),
+          ]),
+        ],
+
+        const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
@@ -165,8 +265,22 @@ class _InputScreenState extends State<InputScreen> {
             child: const Text('Ingest All Sources', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ),
+        const SizedBox(height: 24),
       ]),
     );
+  }
+
+  Widget _constraintField(String label, String val, void Function(String) onChanged, TextInputType keyboardType) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _label(label),
+      TextFormField(
+        initialValue: val,
+        onChanged: onChanged,
+        keyboardType: keyboardType,
+        style: const TextStyle(fontSize: 12, color: Colors.white),
+        decoration: _inputDecoration(),
+      ),
+    ]);
   }
 
   Widget _seedChip(String label, VoidCallback onTap) => ActionChip(
