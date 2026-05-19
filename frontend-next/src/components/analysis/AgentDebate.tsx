@@ -8,6 +8,7 @@ const AGENT_CONFIG: Record<string, { color: "cyan" | "red" | "green" | "purple";
   Raven: { color: "red", role: "Pessimist" },
   Cipher: { color: "cyan", role: "Realist" },
   Resolver: { color: "purple", role: "Synthesizer" },
+  Executor: { color: "cyan", role: "Action Planner" },
 };
 
 export default function AgentDebate({
@@ -17,7 +18,7 @@ export default function AgentDebate({
   agents: AgentResult[];
   resolved?: { final_insight: string; confidence: number; contradiction_resolution: string };
 }) {
-  const primary = agents.filter((a) => ["Orion", "Raven", "Cipher"].includes(a.agent));
+  const primary = agents.filter((a) => ["Orion", "Raven", "Cipher", "Executor"].includes(a.agent));
   const resolver = agents.find((a) => a.agent === "Resolver");
 
   return (

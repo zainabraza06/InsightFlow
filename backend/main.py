@@ -243,6 +243,20 @@ async def analyze(body: dict):
     )
     state_store["last_updated"] = datetime.utcnow().isoformat()
 
+    # Inject Executor as 5th agent card so UI shows all 5 agents
+    chain = result.get("action_chain", [])
+    if chain and "agents" in result:
+        modified = sum(1 for a in chain if a.get("was_modified"))
+        first_action = chain[0].get("action", "") if chain else ""
+        result["agents"].append({
+            "agent": "Executor",
+            "insight": f"Planned a {len(chain)}-step causal action chain. First action: {first_action[:120]}",
+            "impact": f"{modified}/{len(chain)} steps flagged by constraint checker",
+            "recommended_action": chain[-1].get("action", "") if chain else "",
+            "confidence": round(100 - (modified / len(chain) * 20)) if chain else 80,
+            "key_signal": f"{len(chain) - modified}/{len(chain)} steps within constraints",
+        })
+
     return JSONResponse(result)
 
 
