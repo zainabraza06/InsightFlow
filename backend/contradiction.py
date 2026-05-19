@@ -82,13 +82,55 @@ def _generate_gemini(prompt: str) -> str:
     raise RuntimeError("All Gemini models exhausted")
 
 
+_GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-70b-versatile",
+    "mixtral-8x7b-32768",
+    "llama-3.1-8b-instant",
+]
+
+
+async def _generate_via_groq(prompt: str) -> str:
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY not set")
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient() as client:
+        for model in _GROQ_MODELS:
+            try:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=headers,
+                    json={"model": model, "messages": [{"role": "user", "content": prompt}]},
+                    timeout=30.0,
+                )
+                if resp.status_code == 429:
+                    continue
+                resp.raise_for_status()
+                text = resp.json()["choices"][0]["message"]["content"].strip()
+                if text:
+                    logger.info(f"[CONTRADICTION] Groq success model={model}")
+                    return text
+            except Exception as e:
+                logger.warning(f"[CONTRADICTION] Groq model={model} failed: {e}")
+    raise RuntimeError("All Groq models failed")
+
+
 async def _generate(prompt: str) -> str:
-    """Route: OpenRouter first, Gemini direct as fallback."""
-    try:
-        return await _generate_via_openrouter(prompt)
-    except Exception as e:
-        logger.warning(f"[CONTRADICTION] OpenRouter failed ({e}) — falling back to Gemini")
-        return await asyncio.to_thread(_generate_gemini, prompt)
+    """Route: OpenRouter → Groq → Gemini (Vertex AI or AI Studio)."""
+    if os.environ.get("OPENROUTER_API_KEY"):
+        try:
+            return await _generate_via_openrouter(prompt)
+        except Exception as e:
+            logger.warning(f"[CONTRADICTION] OpenRouter failed ({e}) — trying Groq")
+
+    if os.environ.get("GROQ_API_KEY"):
+        try:
+            return await _generate_via_groq(prompt)
+        except Exception as e:
+            logger.warning(f"[CONTRADICTION] Groq failed ({e}) — falling back to Gemini")
+
+    return await asyncio.to_thread(_generate_gemini, prompt)
 
 
 class ContradictionEngine:

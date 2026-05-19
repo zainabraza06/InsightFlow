@@ -163,6 +163,43 @@ _OPENROUTER_MODELS = [
     "meta-llama/llama-3.2-3b-instruct:free",
 ]
 
+_GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-70b-versatile",
+    "mixtral-8x7b-32768",
+    "llama-3.1-8b-instant",
+]
+
+async def _call_groq(prompt: str) -> str:
+    """Call Groq — dedicated hardware, same free open models as OpenRouter but faster."""
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY not set")
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient() as client:
+        for model in _GROQ_MODELS:
+            try:
+                payload = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=headers, json=payload, timeout=30.0,
+                )
+                if resp.status_code == 429:
+                    logger.warning(f"[GROQ] model={model} rate-limited — trying next model")
+                    continue
+                resp.raise_for_status()
+                text = resp.json()["choices"][0]["message"]["content"].strip()
+                if text:
+                    logger.info(f"[GROQ] Success model={model}")
+                    return text
+            except Exception as e:
+                logger.warning(f"[GROQ] model={model} failed: {e}")
+    raise RuntimeError("All Groq models failed")
+
+
 async def _call_openrouter(prompt: str) -> str:
     """Call OpenRouter — tries models in order until one succeeds."""
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
@@ -230,21 +267,27 @@ async def _call_gemini_direct(prompt: str) -> str:
 
 
 async def _call(adk_agent, prompt: str) -> str:
-    """Primary routing logic:
-       1. Try OpenRouter (first preference)
-       2. Try Google ADK
-       3. Fall back to direct Gemini
+    """LLM routing — priority order:
+       1. OpenRouter  (free tier, multiple models)
+       2. Groq        (free tier, dedicated hardware — faster than OpenRouter)
+       3. Google ADK  (if installed)
+       4. Vertex AI / Gemini AI Studio  (credits or free-tier fallback)
     """
-    # 1. Try OpenRouter
+    # 1. OpenRouter
     if os.environ.get("OPENROUTER_API_KEY"):
         try:
-            res = await _call_openrouter(prompt)
-            if res:
-                return res
+            return await _call_openrouter(prompt)
         except Exception as e:
-            logger.warning(f"[ROUTER] OpenRouter failed ({e}) — trying ADK/Gemini")
+            logger.warning(f"[ROUTER] OpenRouter failed ({e}) — trying Groq")
 
-    # 2. Try ADK
+    # 2. Groq
+    if os.environ.get("GROQ_API_KEY"):
+        try:
+            return await _call_groq(prompt)
+        except Exception as e:
+            logger.warning(f"[GROQ] Failed ({e}) — trying ADK/Gemini")
+
+    # 3. ADK
     if _ADK_READY and adk_agent is not None:
         try:
             result = await _run_via_adk(adk_agent, prompt)
@@ -252,9 +295,9 @@ async def _call(adk_agent, prompt: str) -> str:
                 return result
         except Exception as exc:
             name = getattr(adk_agent, "name", "unknown")
-            logger.warning(f"[ADK] {name} runner failed ({exc}) — falling back to direct Gemini")
-            
-    # 3. Fallback to direct Gemini
+            logger.warning(f"[ADK] {name} failed ({exc}) — falling back to Gemini")
+
+    # 4. Vertex AI / Gemini AI Studio
     return await _call_gemini_direct(prompt)
 
 

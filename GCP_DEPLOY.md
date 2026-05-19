@@ -39,6 +39,7 @@ Secret name          Value (copy from .env)
 ────────────────     ─────────────────────────────────────
 GOOGLE_API_KEY       AIzaSyBQ...
 OPENROUTER_API_KEY   sk-or-v1-...
+GROQ_API_KEY         gsk_...  (get free from console.groq.com)
 SMTP_USER            shayanmukhtiar77@gmail.com
 SMTP_PASS            almy lecb ovto whoc
 NOTIFY_EMAIL         zainabraza1960@gmail.com
@@ -75,6 +76,7 @@ In your terminal:
     --max-instances 3 \
     --set-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,\
 OPENROUTER_API_KEY=OPENROUTER_API_KEY:latest,\
+GROQ_API_KEY=GROQ_API_KEY:latest,\
 SMTP_USER=SMTP_USER:latest,\
 SMTP_PASS=SMTP_PASS:latest,\
 NOTIFY_EMAIL=NOTIFY_EMAIL:latest,\
