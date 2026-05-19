@@ -9,7 +9,7 @@ import AgentDebate from "@/components/analysis/AgentDebate";
 import ActionChain from "@/components/analysis/ActionChain";
 import RiskTimeline from "@/components/analysis/RiskTimeline";
 import FeedbackWidget from "@/components/analysis/FeedbackWidget";
-import { ingest, analyze, execute, whatIf, exportTrace, historyApi } from "@/lib/api";
+import { ingest, analyze, execute, whatIf, historyApi } from "@/lib/api";
 import type { IngestResult, AnalyzeResult, ExecuteResult, WhatIfResult } from "@/types";
 
 const DOMAINS = ["Business", "Healthcare", "Supply Chain", "Agriculture", "Finance", "Government"];
@@ -222,11 +222,6 @@ export default function DashboardPage() {
               >
                 3. Execute Chain
               </Button>
-              {(step === "done" || step === "analyzed") && (
-                <Button variant="ghost" size="sm" onClick={() => exportTrace()} className="w-full text-gray-500">
-                  Export Trace
-                </Button>
-              )}
             </div>
           </div>
 

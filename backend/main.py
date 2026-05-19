@@ -349,29 +349,7 @@ async def what_if(body: dict):
     })
 
 
-@app.get("/export-trace")
-def export_trace():
-    trace = {
-        "system": "NEXUS",
-        "challenge": "Challenge 1",
-        "exported_at": datetime.utcnow().isoformat(),
-        "antigravity_workplan": "See PLAN.md in submission",
-        "state_snapshot": {k: v for k, v in state_store.items() if k not in ("ingestion_result", "analysis_result")},
-        "execution_log": state_store["execution_log"],
-        "agents_used": ["Orion", "Raven", "Cipher", "Resolver", "Executor"],
-        "total_cost_pkr": state_store["total_cost_pkr"],
-        "total_latency_ms": state_store["total_latency_ms"],
-        "contradictions_resolved": state_store["contradictions_found"],
-        "failures_recovered": state_store["actions_recovered"],
-        "sources_ingested": state_store["sources_ingested"],
-        "sources_excluded": state_store["sources_excluded"],
-    }
-    content = json.dumps(trace, indent=2)
-    return Response(
-        content=content,
-        media_type="application/json",
-        headers={"Content-Disposition": "attachment; filename=nexus_antigravity_trace.json"},
-    )
+
 
 
 # ── Admin endpoints ───────────────────────────────────────────────

@@ -92,16 +92,7 @@ export async function getBaselineComparison() {
   return request<Record<string, unknown>>("/baseline-comparison");
 }
 
-export async function exportTrace(): Promise<void> {
-  const res = await fetch(`${BASE}/export-trace`, { headers: authHeader() });
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "nexus_antigravity_trace.json";
-  a.click();
-  URL.revokeObjectURL(url);
-}
+
 
 // ── Feedback ──────────────────────────────────────────────────────
 

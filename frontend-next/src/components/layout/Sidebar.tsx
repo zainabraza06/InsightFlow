@@ -13,7 +13,6 @@ export default function Sidebar() {
     { href: "/dashboard", label: "Dashboard", icon: "⚡" },
     { href: "/analyze", label: "New Analysis", icon: "🔬" },
     { href: "/history", label: "History", icon: "📋" },
-    { href: "/trace", label: "Trace Viewer", icon: "🛸" },
     { href: "/settings", label: "Settings", icon: "⚙️" },
   ];
 
