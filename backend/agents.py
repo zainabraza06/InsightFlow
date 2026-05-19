@@ -151,18 +151,26 @@ async def _call_openrouter(prompt: str) -> str:
     last_err = None
     async with httpx.AsyncClient() as client:
         for model in _OPENROUTER_MODELS:
-            try:
-                payload = {"model": model, "messages": [{"role": "user", "content": prompt}]}
-                resp = await client.post(url, headers=headers, json=payload, timeout=60.0)
-                resp.raise_for_status()
-                data = resp.json()
-                text = data["choices"][0]["message"]["content"].strip()
-                if text:
-                    logger.info(f"[ROUTER] OpenRouter success model={model}")
-                    return text
-            except Exception as e:
-                logger.warning(f"[ROUTER] model={model} failed: {e}")
-                last_err = e
+            for attempt in range(2):  # 1 retry per model on rate-limit
+                try:
+                    payload = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+                    resp = await client.post(url, headers=headers, json=payload, timeout=60.0)
+                    if resp.status_code == 429:
+                        wait = 3.0 * (attempt + 1)
+                        logger.warning(f"[ROUTER] model={model} rate-limited — retrying in {wait}s")
+                        await asyncio.sleep(wait)
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+                    text = data["choices"][0]["message"]["content"].strip()
+                    if text:
+                        logger.info(f"[ROUTER] OpenRouter success model={model} attempt={attempt+1}")
+                        return text
+                    break  # empty response — try next model
+                except Exception as e:
+                    logger.warning(f"[ROUTER] model={model} attempt={attempt+1} failed: {e}")
+                    last_err = e
+                    break  # non-429 error — move to next model
 
     raise RuntimeError(f"All OpenRouter models failed. Last error: {last_err}")
 
@@ -506,11 +514,17 @@ class ConsensusEngine:
                 f"n={learning_ctx['total_feedback']}"
             )
 
-        logger.info(f"[ADK] Launching Orion, Raven, Cipher in parallel — adk_ready={_ADK_READY}")
+        logger.info(f"[ADK] Launching Orion, Raven, Cipher staggered — adk_ready={_ADK_READY}")
+
+        async def _staggered(coro, delay: float):
+            if delay > 0:
+                await asyncio.sleep(delay)
+            return await coro
+
         orion, raven, cipher = await asyncio.gather(
-            OrionAgent().analyze(combined_text, domain, credibility_map, learning_ctx),
-            RavenAgent().analyze(combined_text, domain, credibility_map, learning_ctx),
-            CipherAgent().analyze(combined_text, domain, credibility_map, learning_ctx),
+            _staggered(OrionAgent().analyze(combined_text, domain, credibility_map, learning_ctx), 0.0),
+            _staggered(RavenAgent().analyze(combined_text, domain, credibility_map, learning_ctx), 1.2),
+            _staggered(CipherAgent().analyze(combined_text, domain, credibility_map, learning_ctx), 2.4),
         )
 
         # Weighted confidence: Cipher 40%, Orion 30%, Raven 30%
