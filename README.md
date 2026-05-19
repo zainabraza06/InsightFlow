@@ -13,7 +13,7 @@ InsightFlow ingests unstructured multi-source intelligence, runs a 5-agent paral
 1. [Architecture](#architecture)
 2. [Full Pipeline — 7 Phases](#full-pipeline--7-phases)
 3. [Agent System](#agent-system)
-4. [API Reference — All 27 Endpoints](#api-reference--all-27-endpoints)
+4. [API Reference — All 26 Endpoints](#api-reference--all-26-endpoints)
 5. [Feature Matrix — Web vs Mobile](#feature-matrix--web-vs-mobile)
 6. [Tech Stack](#tech-stack)
 7. [Project Structure](#project-structure)
@@ -183,7 +183,7 @@ PHASE 7 — FEEDBACK LEARNING LOOP
 
 ---
 
-## API Reference — All 27 Endpoints
+## API Reference — All 26 Endpoints
 
 ### Authentication
 
@@ -241,7 +241,6 @@ PHASE 7 — FEEDBACK LEARNING LOOP
 | GET | `/health` | Status, agent list, capabilities |
 | GET | `/state` | Current pipeline state snapshot |
 | GET | `/logs` | Execution log from current run |
-| GET | `/export-trace` | Full trace JSON download |
 | GET | `/baseline-comparison` | InsightFlow vs simple heuristic |
 
 ### Admin (admin role required)
@@ -281,7 +280,6 @@ PHASE 7 — FEEDBACK LEARNING LOOP
 | Feedback / learning widget | Yes | Yes |
 | Baseline comparison | Yes | Yes |
 | Admin panel | Yes | — |
-| Trace viewer | Yes | — |
 
 ---
 
@@ -339,7 +337,6 @@ insightflow/
 |       |       +-- history/[id]/page.tsx    # History detail
 |       |       +-- admin/page.tsx           # Admin panel
 |       |       +-- settings/page.tsx        # Profile settings
-|       |       +-- trace/page.tsx           # Trace viewer
 |       +-- components/
 |       |   +-- analysis/
 |       |   |   +-- AgentDebate.tsx          # Agent insights + DisagreementMeter
@@ -373,7 +370,6 @@ insightflow/
 |           +-- api_service.dart             # HTTP client — all endpoints + constraints
 |           +-- auth_service.dart            # JWT storage (SharedPreferences)
 |
-+-- antigravity_trace.json                   # Dev workplan + 23 execution events
 +-- README.md
 ```
 
@@ -562,7 +558,6 @@ Total latency: 25,547ms  |  Total cost: PKR 168,000
 - [x] Mobile app — Flutter iOS/Android, full feature parity
 - [x] JWT authentication — SHA-256+salt hashing, per-user history (max 50)
 - [x] Admin panel — user management, feedback stats, domain breakdown
-- [x] Trace viewer — Antigravity development trace + 23 execution events
 - [x] Google ADK integration — graceful fallback when not installed
 - [x] OpenRouter as primary LLM — free tier, 4-model fallback chain
 - [x] Robust JSON parser — `raw_decode()` handles prose-wrapped LLM responses
