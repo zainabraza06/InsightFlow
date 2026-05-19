@@ -106,3 +106,7 @@ def get_user_feedback(user_email: str) -> list:
 def get_all_feedback_entries() -> list:
     data = _load()
     return data.get("entries", [])
+
+
+def reset_all_feedback():
+    _save({"entries": []})

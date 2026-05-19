@@ -123,3 +123,15 @@ def update_user(email: str, name: str | None = None, password: str | None = None
     users[email] = u
     _save_users(users)
     return {"name": u["name"], "email": email}
+
+
+def toggle_user_admin_role(email: str) -> dict:
+    users = _load_users()
+    key = email.strip().lower()
+    if key not in users:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    current_role = users[key].get("is_admin", False)
+    users[key]["is_admin"] = not current_role
+    _save_users(users)
+    return {"email": key, "is_admin": users[key]["is_admin"]}

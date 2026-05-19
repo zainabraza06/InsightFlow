@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
 import os
 
+import httpx
 import google.genai as genai
 
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
@@ -11,9 +13,42 @@ _API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 _client = genai.Client(api_key=_API_KEY) if _API_KEY else None
 
 _GEMINI_MODELS = ("gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash")
+_OPENROUTER_MODELS = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "deepseek/deepseek-v4-flash:free",
+    "google/gemma-4-31b-it:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+]
 
 
-def _generate(prompt: str) -> str:
+async def _generate_via_openrouter(prompt: str) -> str:
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY not set")
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://nexus-ai.local",
+    }
+    async with httpx.AsyncClient() as client:
+        for model in _OPENROUTER_MODELS:
+            try:
+                payload = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers, json=payload, timeout=60.0,
+                )
+                resp.raise_for_status()
+                text = resp.json()["choices"][0]["message"]["content"].strip()
+                if text:
+                    logger.info(f"[CONTRADICTION] OpenRouter success model={model}")
+                    return text
+            except Exception as e:
+                logger.warning(f"[CONTRADICTION] OpenRouter model={model} failed: {e}")
+    raise RuntimeError("All OpenRouter models failed for contradiction detection")
+
+
+def _generate_gemini(prompt: str) -> str:
     api_key = os.environ.get("GOOGLE_API_KEY", "")
     client = _client or (genai.Client(api_key=api_key) if api_key else None)
     if not client:
@@ -28,6 +63,15 @@ def _generate(prompt: str) -> str:
         except Exception as e:
             logger.warning(f"[CONTRADICTION] model={model} failed: {e}")
     raise RuntimeError("All Gemini models exhausted")
+
+
+async def _generate(prompt: str) -> str:
+    """Route: OpenRouter first, Gemini direct as fallback."""
+    try:
+        return await _generate_via_openrouter(prompt)
+    except Exception as e:
+        logger.warning(f"[CONTRADICTION] OpenRouter failed ({e}) — falling back to Gemini")
+        return await asyncio.to_thread(_generate_gemini, prompt)
 
 
 class ContradictionEngine:
@@ -60,7 +104,7 @@ class ContradictionEngine:
         source["credibility_score"] = score
         return score
 
-    def detect_contradictions(self, sources: list) -> dict:
+    async def detect_contradictions(self, sources: list) -> dict:
         valid_sources = [s for s in sources if s.get("credibility_score", 0) > 0.0]
         if not valid_sources:
             return self._fallback_contradictions()
@@ -112,7 +156,7 @@ Return ONLY valid JSON. No markdown, no preamble:
 }}"""
 
         try:
-            raw = _generate(prompt)
+            raw = await _generate(prompt)
             raw = raw.replace("```json", "").replace("```", "").strip()
             result = json.loads(raw)
             for c in result.get("contradictions", []):
@@ -121,7 +165,7 @@ Return ONLY valid JSON. No markdown, no preamble:
                 )
             return result
         except Exception as e:
-            logger.warning(f"Gemini contradiction detection failed: {e} — using fallback")
+            logger.warning(f"Contradiction detection failed: {e} — using fallback")
             return self._fallback_contradictions()
 
     def _fallback_contradictions(self) -> dict:

@@ -17,7 +17,7 @@ from constraints import ConstraintChecker, DEFAULT_CONSTRAINTS
 from agents import ConsensusEngine, ExecutorAgent
 from sdk_agents import SDKConsensusEngine
 from simulator import ActionSimulator, state_store
-from auth import register_user, login_user, get_current_user, get_user_info, update_user, is_admin_user, get_all_users_list, seed_admin
+from auth import register_user, login_user, get_current_user, get_user_info, update_user, is_admin_user, get_all_users_list, seed_admin, toggle_user_admin_role
 import history_store
 import feedback_store
 
@@ -183,7 +183,7 @@ async def ingest(
 
     filtered = contradiction_engine.filter_noise(all_sources)
     trusted_sources = filtered["trusted"]
-    contradictions = contradiction_engine.detect_contradictions(trusted_sources)
+    contradictions = await contradiction_engine.detect_contradictions(trusted_sources)
 
     state_store["sources_ingested"] = len(all_sources)
     state_store["sources_trusted"] = len(filtered["trusted"])
@@ -428,6 +428,31 @@ def admin_dashboard_stats(user: str = Depends(check_admin)):
         "total_cost_spent": total_cost_spent,
         "domain_stats": domain_stats,
     })
+
+
+@app.post("/admin/toggle-role")
+def admin_toggle_role(body: dict, user: str = Depends(check_admin)):
+    target_email = body.get("email", "").strip().lower()
+    if not target_email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    if target_email == user.lower():
+        raise HTTPException(status_code=400, detail="Cannot toggle your own administrative privileges")
+    res = toggle_user_admin_role(target_email)
+    return JSONResponse(res)
+
+
+@app.delete("/admin/history/{id}")
+def admin_delete_history(id: str, user: str = Depends(check_admin)):
+    success = history_store.admin_delete_entry(id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Execution log not found")
+    return JSONResponse({"deleted": True})
+
+
+@app.post("/admin/reset-feedback")
+def admin_reset_feedback(user: str = Depends(check_admin)):
+    feedback_store.reset_all_feedback()
+    return JSONResponse({"success": True, "message": "All feedback commentary and reinforcement context has been successfully reset"})
 
 
 # Mount frontend LAST so API routes take precedence

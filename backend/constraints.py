@@ -38,7 +38,7 @@ class ConstraintChecker:
             violations.append(
                 f"Cost PKR {cost:,} exceeds per-step budget PKR {per_step_budget:,.0f}"
             )
-        if time_hours > per_step_hours * time_mult:
+        if time_hours > per_step_hours:
             violations.append(
                 f"Time {time_hours:.1f}h exceeds allocation {per_step_hours * time_mult:.1f}h"
             )

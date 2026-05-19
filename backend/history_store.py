@@ -91,3 +91,18 @@ def get_all_entries() -> list:
             })
     all_records.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return all_records
+
+
+def admin_delete_entry(entry_id: str) -> bool:
+    data = _load()
+    deleted = False
+    for email in list(data.keys()):
+        entries = data[email]
+        new_entries = [e for e in entries if e["id"] != entry_id]
+        if len(new_entries) < len(entries):
+            data[email] = new_entries
+            deleted = True
+            break
+    if deleted:
+        _save(data)
+    return deleted

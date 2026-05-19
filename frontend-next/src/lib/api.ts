@@ -153,4 +153,16 @@ export const adminApi = {
     total_cost_spent: number;
     domain_stats: Record<string, { runs: number; cost: number }>;
   }>("/admin/dashboard-stats"),
+  toggleRole: (email: string) =>
+    request<{ email: string; is_admin: boolean }>("/admin/toggle-role", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    }),
+  deleteHistory: (id: string) =>
+    request<{ deleted: boolean }>(`/admin/history/${id}`, { method: "DELETE" }),
+  resetFeedback: () =>
+    request<{ success: boolean; message: string }>("/admin/reset-feedback", {
+      method: "POST",
+    }),
 };
