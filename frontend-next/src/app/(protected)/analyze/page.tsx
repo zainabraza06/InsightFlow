@@ -88,7 +88,7 @@ export default function AnalyzePage() {
         };
         const aRes = await analyze(domain, constraints);
         setAnalyzeResult(aRes);
-        const eRes = await execute(undefined, domain);
+        const eRes = await execute(aRes.action_chain, domain);
         setExecuteResult(eRes);
         // save to history
         await historyApi.save({

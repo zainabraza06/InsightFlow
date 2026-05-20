@@ -9,8 +9,8 @@ from real_actions import (
     step4_launch_mitigation,
 )
 
-logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
-logger = logging.getLogger("nexus.simulator")
+logging.basicConfig(level=logging.INFO, format="[InsightFlow] %(message)s")
+logger = logging.getLogger("insightflow.simulator")
 
 state_store = {
     "status": "idle",
@@ -81,7 +81,7 @@ class ActionSimulator:
         before = _snapshot()
         state_store["before_state"] = before
         self.add_log(
-            f"[NEXUS] Chain execution started — {len(chain)} actions — domain: {domain}"
+            f"[InsightFlow] Chain execution started — {len(chain)} actions — domain: {domain}"
         )
 
         for action in chain:
@@ -92,18 +92,18 @@ class ActionSimulator:
             if step == 3 and random.random() < 0.40:
                 action["status"] = "FAILED"
                 self.add_log(
-                    "[NEXUS] Step 3 FAILED — Google Sheets write timed out after 30s. "
+                    "[InsightFlow] Step 3 FAILED — Google Sheets write timed out after 30s. "
                     "Transaction rolled back."
                 )
                 self.add_log(
-                    "[NEXUS] Recovery protocol initiated. Retry attempt 1 of 2..."
+                    "[InsightFlow] Recovery protocol initiated. Retry attempt 1 of 2..."
                 )
                 self.add_log(
-                    "[NEXUS] Rolling back partial sheet write. Restoring last good state."
+                    "[InsightFlow] Rolling back partial sheet write. Restoring last good state."
                 )
-                self.add_log("[NEXUS] Retry 1 of 2 executing now...")
+                self.add_log("[InsightFlow] Retry 1 of 2 executing now...")
                 self.add_log(
-                    "[NEXUS] Retry succeeded. Sheet write confirmed. Chain resuming."
+                    "[InsightFlow] Retry succeeded. Sheet write confirmed. Chain resuming."
                 )
                 action["status"] = "RECOVERED"
                 state_store["actions_failed"] += 1
@@ -129,7 +129,7 @@ class ActionSimulator:
         step3_update_system_state(domain, final_state)
 
         self.add_log(
-            f"[NEXUS] Chain complete — cost PKR {state_store['total_cost_pkr']} — "
+            f"[InsightFlow] Chain complete — cost PKR {state_store['total_cost_pkr']} — "
             f"latency {state_store['total_latency_ms']}ms"
         )
 
@@ -158,7 +158,7 @@ class ActionSimulator:
             real = step2_notify_stakeholders(action_text, domain, insight)
             channel = real.get("channel", "email")
             self.add_log(
-                f"[NEXUS] Step 2 | {txn_id} | REAL EMAIL → {real.get('to','?')} | "
+                f"[InsightFlow] Step 2 | {txn_id} | REAL EMAIL → {real.get('to','?')} | "
                 f"subject: {real.get('subject','')[:60]} | real={real.get('real')}"
             )
 
@@ -175,7 +175,7 @@ class ActionSimulator:
             channel = real.get("channel", "google_sheets")
             sheet_url = real.get("sheet_url", "")
             self.add_log(
-                f"[NEXUS] Step 3 | {txn_id} | REAL SHEET UPDATE → {sheet_url or 'simulated'} | "
+                f"[InsightFlow] Step 3 | {txn_id} | REAL SHEET UPDATE → {sheet_url or 'simulated'} | "
                 f"real={real.get('real')}"
             )
 
@@ -184,7 +184,7 @@ class ActionSimulator:
             real = step4_launch_mitigation(action_text, domain, cost)
             channel = real.get("channel", "webhook")
             self.add_log(
-                f"[NEXUS] Step 4 | {txn_id} | REAL WEBHOOK → {channel} | "
+                f"[InsightFlow] Step 4 | {txn_id} | REAL WEBHOOK → {channel} | "
                 f"http={real.get('http_status')} | real={real.get('real')}"
             )
 
@@ -194,7 +194,7 @@ class ActionSimulator:
             real = {
                 "real": False,
                 "channel": f"simulated_step_{step}",
-                "endpoint": f"/api/nexus/chain/step-{step}",
+                "endpoint": f"/api/insightflow/chain/step-{step}",
                 "method": "POST",
                 "http_status": 200,
                 "transaction_id": txn_id,
@@ -202,7 +202,7 @@ class ActionSimulator:
             }
             time.sleep(random.uniform(0.08, 0.25))
             self.add_log(
-                f"[NEXUS] Step {step} | {txn_id} | simulated | "
+                f"[InsightFlow] Step {step} | {txn_id} | simulated | "
                 f"{action_text[:60]}"
             )
 
