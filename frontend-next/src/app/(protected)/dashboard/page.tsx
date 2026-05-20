@@ -14,9 +14,24 @@ import type { IngestResult, AnalyzeResult, ExecuteResult, WhatIfResult } from "@
 
 const DOMAINS = ["Business", "Healthcare", "Supply Chain", "Agriculture", "Finance", "Government"];
 const SEEDS = [
-  { label: "Supply Chain", domain: "Supply Chain", text: "Karachi port congestion delays 200 containers. Vendor claims 3-day delay. Regulatory data shows 2-week backlog. Industry report contradicts vendor optimism." },
-  { label: "Hospital", domain: "Healthcare", text: "Insulin shortage at major hospital. Vendor confirms shipment next week. WHO report flags global shortage. Patient records show critical inventory at 4-day supply." },
-  { label: "Agri Export", domain: "Agriculture", text: "Punjab wheat export ban lifted. Government press release claims surplus. Ground reports from district agriculture show 30% below target yield due to flooding." },
+  {
+    label: "Supply Chain",
+    domain: "Supply Chain",
+    text: "Karachi port congestion delays 200 containers. Vendor claims 3-day delay. Regulatory data shows 2-week backlog. Industry report contradicts vendor optimism.",
+    csv: `Container_ID,Status,Delay_Days,Vendor_Claim_Days,Value_PKR\nKHI-001,Held,14,3,2500000\nKHI-002,Held,14,3,1800000\nKHI-003,Cleared,0,0,950000\nKHI-004,Held,12,3,3200000\nKHI-005,Held,16,3,1100000`,
+  },
+  {
+    label: "Hospital",
+    domain: "Healthcare",
+    text: "Insulin shortage at major hospital. Vendor confirms shipment next week. WHO report flags global shortage. Patient records show critical inventory at 4-day supply.",
+    csv: `Drug,Current_Stock_Units,Daily_Usage,Days_Remaining,Vendor_Promise_Days\nInsulin Glargine,480,120,4,7\nInsulin Regular,210,80,2,7\nMetformin,3200,400,8,3\nAmlodipine,1500,200,7,2\nOmeprazole,2800,350,8,4`,
+  },
+  {
+    label: "Agri Export",
+    domain: "Agriculture",
+    text: "Punjab wheat export ban lifted. Government press release claims surplus. Ground reports from district agriculture show 30% below target yield due to flooding.",
+    csv: `District,Yield_MT,Target_MT,Flood_Affected_Ha,Status\nLahore,850000,900000,12000,On Target\nMultan,620000,880000,95000,Below Target\nMuzaffargarh,340000,780000,185000,Critical Shortage\nRajanpur,290000,720000,210000,Critical Shortage\nDG Khan,310000,750000,198000,Critical Shortage`,
+  },
 ];
 const WHATIF_PRESETS = [
   { label: "Budget ×2", mod: { budget_pkr: 1000000 } },
@@ -48,6 +63,7 @@ export default function DashboardPage() {
   function applySeed(s: (typeof SEEDS)[0]) {
     setText(s.text);
     setDomain(s.domain);
+    setCsv(s.csv);
     setStep("idle");
     setIngestResult(null);
     setAnalyzeResult(null);
@@ -92,7 +108,7 @@ export default function DashboardPage() {
     setError("");
     setStep("executing");
     try {
-      const res = await execute(undefined, domain);
+      const res = await execute(analyzeResult?.action_chain ?? [], domain);
       setExecuteResult(res);
       setStep("done");
       // Auto-save to history
@@ -256,6 +272,13 @@ export default function DashboardPage() {
                 <div className="text-center">
                   <p className="text-lg font-bold text-nexus-amber font-mono">{ingestResult.contradictions_found}</p>
                   <p className="text-[10px] text-gray-500">Conflicts</p>
+                  {ingestResult.contradictions_found > 0 && (
+                    <p className="text-[9px] text-gray-600 mt-0.5 font-mono">
+                      {ingestResult.internal_contradictions_found ? `${ingestResult.internal_contradictions_found} internal` : null}
+                      {ingestResult.internal_contradictions_found && ingestResult.cross_source_contradictions_found ? " · " : null}
+                      {ingestResult.cross_source_contradictions_found ? `${ingestResult.cross_source_contradictions_found} cross-src` : null}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
