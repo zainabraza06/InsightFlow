@@ -185,7 +185,14 @@ Scores adjusted per source:
 
 **Phase 3 — Contradiction Detection** (OpenRouter → Groq → Gemini)
 
-Cross-source conflict detection with trust ranking, stale/noise flagging, temporal trend analysis, and 3-step investigation paths per conflict. Robust JSON parser using `raw_decode()` handles prose-wrapped LLM responses.
+Each contradiction is classified by type:
+
+| Type | Meaning | Example |
+|------|---------|---------|
+| `internal` | Conflicting claims within a single source | One text block says "surplus" and "30% yield gap" |
+| `cross_source` | Conflicting claims between two different sources | Government CSV vs field report text |
+
+Additional detection: trust ranking, stale/noise flagging, temporal trend analysis, 3-step investigation paths per conflict. Robust JSON parser using `raw_decode()` handles prose-wrapped LLM responses. The UI shows the split count (e.g. "2 conflicts — 1 internal · 1 cross-src") so users understand why conflicts exist even with a single source.
 
 **Phase 4 — 5-Agent Parallel Debate**
 
@@ -385,7 +392,7 @@ No code changes needed — the env var switches the backend transparently.
 | `GCP_PROJECT` | Cloud only | GCP project ID for Vertex AI |
 | `GCP_LOCATION` | Cloud only | GCP region (e.g. `us-central1`) |
 | `FIRESTORE_ENABLED` | Cloud only | Set `true` to use Firestore instead of JSON |
-| `NEXUS_BASE_URL` | Yes | Backend URL (self-reference for orchestration) |
+| `INSIGHTFLOW_BASE_URL` | Optional | Backend URL (self-reference, unused in Cloud Run) |
 | `SMTP_USER` | Optional | Gmail address for Step 2 email alerts |
 | `SMTP_PASS` | Optional | Gmail App Password (16 chars, requires 2FA) |
 | `NOTIFY_EMAIL` | Optional | Recipient for Step 2 alerts |
@@ -471,7 +478,7 @@ aiseekho/
 - [x] Multi-source ingestion — PDF, text, CSV, URL, feed
 - [x] Credibility scoring — deterministic per-source
 - [x] Noise filtering — excluded below 0.30 threshold
-- [x] Contradiction detection — cross-source conflicts with trust ranking
+- [x] Contradiction detection — cross-source conflicts with trust ranking; each conflict classified as `internal` (within one source) or `cross_source` (between sources)
 - [x] Temporal trend analysis — improving / worsening / stable + rate-of-change
 - [x] 5-agent parallel debate — Orion + Raven + Cipher via `asyncio.gather`
 - [x] Resolver synthesis — single authoritative finding from 3 agents
@@ -480,7 +487,7 @@ aiseekho/
 - [x] Real integrations — Gmail SMTP, Google Sheets, Slack Webhook
 - [x] What-if counterfactual analysis
 - [x] Agent learning loop — feedback ratings injected per domain
-- [x] Web frontend — Next.js 14 + TypeScript + Tailwind, dark theme
+- [x] Web frontend — Next.js 14 + TypeScript + Tailwind, dark theme; Quick Seeds with pre-built CSV + text scenarios (Supply Chain / Hospital / Agri Export); CSV textarea; Load demo button
 - [x] Mobile app — Flutter, full feature parity
 - [x] JWT authentication — SHA-256+salt, per-user history
 - [x] Admin panel — user management, feedback stats, domain breakdown
