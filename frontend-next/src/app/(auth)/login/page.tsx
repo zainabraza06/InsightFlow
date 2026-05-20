@@ -34,7 +34,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block font-mono font-bold text-nexus-cyan text-2xl tracking-widest mb-2">
-            NEXUS
+            InsightFlow
           </Link>
           <p className="text-gray-400 text-sm">Sign in to your account</p>
         </div>

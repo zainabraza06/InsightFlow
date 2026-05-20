@@ -50,7 +50,7 @@ export default function HistoryPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-xl font-bold text-white">Analysis History</h1>
-              <p className="text-sm text-gray-500 mt-1">Your past NEXUS analyses, saved automatically after execution</p>
+              <p className="text-sm text-gray-500 mt-1">Your past InsightFlow analyses, saved automatically after execution</p>
             </div>
             <Link href="/analyze">
               <Button>New Analysis</Button>

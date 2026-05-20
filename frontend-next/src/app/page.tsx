@@ -21,7 +21,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-nexus-bg flex flex-col">
       {/* Nav */}
       <nav className="border-b border-nexus-border px-8 py-4 flex items-center justify-between">
-        <span className="font-mono font-bold text-nexus-cyan text-xl tracking-widest">NEXUS</span>
+        <span className="font-mono font-bold text-nexus-cyan text-xl tracking-widest">InsightFlow</span>
         <div className="flex items-center gap-3">
           <Link href="/login" className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-2 rounded-lg">
             Login
@@ -46,7 +46,7 @@ export default function LandingPage() {
           <span className="text-nexus-cyan"> acts</span>
         </h1>
         <p className="mt-6 text-lg text-gray-400 max-w-2xl leading-relaxed">
-          NEXUS ingests any source, runs 5 AI agents in parallel, resolves contradictions, checks constraints, and executes a verified action chain — automatically.
+          InsightFlow ingests any source, runs 5 AI agents in parallel, resolves contradictions, checks constraints, and executes a verified action chain — automatically.
         </p>
         <div className="mt-10 flex items-center gap-4">
           <Link
@@ -91,7 +91,7 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-nexus-border px-8 py-6 text-center">
-        <p className="text-sm text-gray-600 font-mono">NEXUS v2.0 · Antigravity Hackathon Challenge 1</p>
+        <p className="text-sm text-gray-600 font-mono">InsightFlow v2.0 · Antigravity Hackathon Challenge 1</p>
       </footer>
     </div>
   );

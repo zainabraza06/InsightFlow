@@ -17,7 +17,7 @@ export function FullPageLoader() {
     <div className="fixed inset-0 bg-nexus-bg flex items-center justify-center z-50">
       <div className="flex flex-col items-center gap-4">
         <LoadingSpinner size="lg" />
-        <p className="text-nexus-cyan font-mono text-sm animate-pulse">NEXUS initializing...</p>
+        <p className="text-nexus-cyan font-mono text-sm animate-pulse">InsightFlow initializing...</p>
       </div>
     </div>
   );
