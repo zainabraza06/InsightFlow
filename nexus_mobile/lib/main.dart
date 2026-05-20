@@ -65,22 +65,35 @@ class _MainShell extends StatefulWidget {
 
 class _MainShellState extends State<_MainShell> {
   int _tab = 0;
+  int _historyVersion = 0;
 
-  final _screens = const [
-    InputScreen(),
-    HistoryScreen(),
-    SettingsScreen(),
-  ];
+  Widget get _currentScreen {
+    switch (_tab) {
+      case 1:
+        return HistoryScreen(key: ValueKey(_historyVersion));
+      case 2:
+        return const SettingsScreen();
+      default:
+        return const InputScreen();
+    }
+  }
+
+  void _onTabSelected(int i) {
+    setState(() {
+      if (i == 1) _historyVersion++;
+      _tab = i;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _tab, children: _screens),
+      body: _currentScreen,
       bottomNavigationBar: NavigationBar(
         backgroundColor: const Color(0xFF0f0f1a),
         indicatorColor: const Color(0x1A00d4ff),
         selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
+        onDestinationSelected: _onTabSelected,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.bolt_outlined, color: Color(0xFF6b7280)),

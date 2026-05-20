@@ -33,7 +33,11 @@ class _DebateScreenState extends State<DebateScreen> {
       final data = await ApiService().analyze(widget.domain, constraints: widget.constraints);
       if (mounted) {
         Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ExecutionScreen(consensusData: data, domain: widget.domain),
+          builder: (_) => ExecutionScreen(
+            consensusData: data,
+            ingestData: widget.ingestData,
+            domain: widget.domain,
+          ),
         ));
       }
     } catch (e) {

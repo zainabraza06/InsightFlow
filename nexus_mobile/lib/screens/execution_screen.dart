@@ -6,9 +6,10 @@ import 'chain_screen.dart';
 
 class ExecutionScreen extends StatefulWidget {
   final Map<String, dynamic> consensusData;
+  final Map<String, dynamic>? ingestData;
   final String domain;
 
-  const ExecutionScreen({super.key, required this.consensusData, required this.domain});
+  const ExecutionScreen({super.key, required this.consensusData, this.ingestData, required this.domain});
 
   @override
   State<ExecutionScreen> createState() => _ExecutionScreenState();
@@ -46,6 +47,21 @@ class _ExecutionScreenState extends State<ExecutionScreen> {
       final updatedChain = (result['chain'] as List?)
           ?.map((a) => ActionChain.fromJson(a as Map<String, dynamic>))
           .toList() ?? _chain;
+
+      // Save to history
+      final firstAction = _chain.isNotEmpty ? _chain.first.action : widget.domain;
+      ApiService().saveHistory({
+        'domain': widget.domain,
+        'topic': firstAction.length > 80 ? firstAction.substring(0, 80) : firstAction,
+        'sources_processed': (widget.ingestData?['sources_processed'] as num?)?.toInt() ?? 0,
+        'contradictions_found': (widget.ingestData?['contradictions_found'] as num?)?.toInt() ?? 0,
+        'actions_total': _chain.length,
+        'total_cost_pkr': (result['total_cost_pkr'] as num?)?.toInt() ?? 0,
+        'status': 'completed',
+        'ingest_result': widget.ingestData,
+        'analyze_result': widget.consensusData,
+        'execute_result': result,
+      }).catchError((_) => <String, dynamic>{});
 
       if (mounted) {
         setState(() => _chain = updatedChain);
@@ -115,7 +131,7 @@ class _ExecutionScreenState extends State<ExecutionScreen> {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: modCount == 0 ? const Color(0xFF10b981).withOpacity(0.1) : const Color(0xFFf59e0b).withOpacity(0.1),
+              color: modCount == 0 ? const Color(0xFF10b981).withValues(alpha: 0.1) : const Color(0xFFf59e0b).withValues(alpha: 0.1),
               border: Border.all(color: modCount == 0 ? const Color(0xFF10b981) : const Color(0xFFf59e0b)),
               borderRadius: BorderRadius.circular(6),
             ),
@@ -176,7 +192,7 @@ class _ExecutionScreenState extends State<ExecutionScreen> {
 
   Widget _chip(String label, Color color) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
         child: Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
       );
 
