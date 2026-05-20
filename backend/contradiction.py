@@ -7,7 +7,7 @@ import httpx
 import google.genai as genai
 
 logging.basicConfig(level=logging.INFO, format="[NEXUS] %(message)s")
-logger = logging.getLogger("nexus.contradiction")
+logger = logging.getLogger("insightflow.contradiction")
 
 _API_KEY       = os.environ.get("GOOGLE_API_KEY", "")
 _GCP_PROJECT   = os.environ.get("GCP_PROJECT", "insightflow-496519")
@@ -168,21 +168,31 @@ class ContradictionEngine:
         if not valid_sources:
             return self._fallback_contradictions()
 
+        single_source = len(valid_sources) == 1
+
         lines = []
-        for s in valid_sources:
+        for i, s in enumerate(valid_sources):
             lines.append(
-                f"[{s['source_type'].upper()}] (credibility={s.get('credibility_score', 0):.2f}): {s['content'][:500]}"
+                f"[SOURCE {i+1}: {s['source_type'].upper()}] (credibility={s.get('credibility_score', 0):.2f}): {s['content'][:500]}"
             )
         formatted_sources = "\n\n".join(lines)
+
+        cross_source_note = (
+            'Since there is only ONE source, any contradictions found are INTERNAL (conflicting claims within the same source). Set "contradiction_type": "internal" for all.'
+            if single_source else
+            'Classify each contradiction: "internal" if both conflicting claims come from within the same single source, "cross_source" if they come from different sources.'
+        )
 
         prompt = f"""You are a contradiction detection and source intelligence agent.
 
 Analyze these information sources:
 {formatted_sources}
 
+{cross_source_note}
+
 Tasks:
-1. Find ALL contradictions where two or more sources make conflicting claims about the same metric, event, or situation.
-2. For each contradiction: identify which source to trust more based on recency, specificity, and credibility score.
+1. Find ALL contradictions where conflicting claims exist — either within a single source (internal) or between different sources (cross_source).
+2. For each contradiction: identify which claim to trust more based on recency, specificity, and credibility score.
 3. Identify any sources that appear stale (old data), noisy (spam/irrelevant), or low-credibility.
 4. Perform temporal analysis: if any source contains time-series data (dates, months, weeks), describe the trend direction (improving/worsening/stable) and rate of change.
 5. For each contradiction, generate an investigation path — 3 concrete steps a human analyst should take to resolve it.
@@ -191,6 +201,7 @@ Return ONLY valid JSON. No markdown, no preamble:
 {{
   "contradictions": [
     {{
+      "contradiction_type": "internal or cross_source",
       "source_a_type": "...",
       "source_b_type": "...",
       "claim_a": "exact claim from source A",
@@ -221,7 +232,6 @@ Return ONLY valid JSON. No markdown, no preamble:
             try:
                 result = json.loads(cleaned)
             except json.JSONDecodeError:
-                # Model wrapped JSON in prose — find first { or [
                 result = None
                 for ch in ('{', '['):
                     idx = cleaned.find(ch)
@@ -233,9 +243,13 @@ Return ONLY valid JSON. No markdown, no preamble:
                             pass
                 if result is None:
                     raise ValueError("No valid JSON in contradiction response")
+
+            # Ensure contradiction_type is set; fall back based on source count
             for c in result.get("contradictions", []):
+                if "contradiction_type" not in c:
+                    c["contradiction_type"] = "internal" if single_source else "cross_source"
                 logger.info(
-                    f"Contradiction detected: {c.get('source_a_type')} vs {c.get('source_b_type')} — {c.get('conflict_reason')}. Resolver agent invoked."
+                    f"Contradiction detected [{c['contradiction_type']}]: {c.get('source_a_type')} vs {c.get('source_b_type')} — {c.get('conflict_reason')}. Resolver agent invoked."
                 )
             return result
         except Exception as e:
@@ -246,6 +260,7 @@ Return ONLY valid JSON. No markdown, no preamble:
         return {
             "contradictions": [
                 {
+                    "contradiction_type": "cross_source",
                     "source_a_type": "realtime_feed",
                     "source_b_type": "csv",
                     "claim_a": "Critical shortage detected at distribution points",

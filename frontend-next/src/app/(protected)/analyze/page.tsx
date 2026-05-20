@@ -11,6 +11,23 @@ import type { IngestResult, AnalyzeResult, ExecuteResult } from "@/types";
 const DOMAINS = ["Business", "Healthcare", "Supply Chain", "Agriculture", "Finance", "Government"];
 const STEPS = ["Source Input", "Configure", "Results"];
 
+const DEMO_SEED = {
+  topic: "Punjab Wheat Export Ban — Surplus vs Yield Gap",
+  domain: "Agriculture",
+  text: `Government press release (May 2026): Punjab wheat export ban has been lifted. The Ministry of Food Security confirms a national surplus of 2.4 million metric tons above consumption needs. Export quota set at 1.2 million MT for Q3 2026.
+
+Ground report from District Agriculture Officers (May 2026): Flood damage across southern Punjab reduced yield by 30% below target. Districts of Muzaffargarh, Rajanpur, and DG Khan report critical shortfalls. Field data shows actual production at 18.6 million MT against a 26.5 million MT target. Surplus claim is disputed by district officers.`,
+  csvData: `District,Yield_MT,Target_MT,Flood_Affected_Ha,Status
+Lahore,850000,900000,12000,On Target
+Multan,620000,880000,95000,Below Target
+Faisalabad,910000,950000,8500,On Target
+Muzaffargarh,340000,780000,185000,Critical Shortage
+Rajanpur,290000,720000,210000,Critical Shortage
+DG Khan,310000,750000,198000,Critical Shortage
+Bahawalpur,480000,820000,132000,Below Target
+Rawalpindi,770000,800000,15000,On Target`,
+};
+
 export default function AnalyzePage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
@@ -18,7 +35,15 @@ export default function AnalyzePage() {
   const [topic, setTopic] = useState("");
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
+  const [csvData, setCsvData] = useState("");
   const [includeFeed, setIncludeFeed] = useState(false);
+
+  function loadDemo() {
+    setTopic(DEMO_SEED.topic);
+    setDomain(DEMO_SEED.domain);
+    setText(DEMO_SEED.text);
+    setCsvData(DEMO_SEED.csvData);
+  }
   const [budget, setBudget] = useState("500000");
   const [timeHours, setTimeHours] = useState("4");
   const [staff, setStaff] = useState("3");
@@ -39,6 +64,7 @@ export default function AnalyzePage() {
         const fd = new FormData();
         fd.append("text", text);
         fd.append("url", url);
+        fd.append("csv_data", csvData);
         fd.append("domain", domain);
         fd.append("topic", topic);
         fd.append("include_feed", String(includeFeed));
@@ -108,7 +134,12 @@ export default function AnalyzePage() {
 
           {currentStep === 0 && (
             <Card className="p-6 space-y-5">
-              <h2 className="text-sm font-semibold text-white">Add your sources</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-white">Add your sources</h2>
+                <button onClick={loadDemo} className="text-xs text-nexus-cyan hover:text-nexus-cyan/70 font-mono transition-colors">
+                  Load demo data ↗
+                </button>
+              </div>
               <Input label="Analysis Topic" placeholder="e.g. Supply chain disruption in Karachi" value={topic} onChange={(e) => setTopic(e.target.value)} />
               <div>
                 <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Domain</label>
@@ -118,6 +149,7 @@ export default function AnalyzePage() {
                 </select>
               </div>
               <Textarea label="Text Source" rows={6} placeholder="Paste intelligence reports, news, data..." value={text} onChange={(e) => setText(e.target.value)} />
+              <Textarea label="CSV Data" rows={4} placeholder={"District,Yield_MT,Target_MT\nLahore,850000,900000"} value={csvData} onChange={(e) => setCsvData(e.target.value)} />
               <Input label="URL Source" type="url" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} />
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={includeFeed} onChange={(e) => setIncludeFeed(e.target.checked)} className="accent-nexus-cyan" />
@@ -135,7 +167,23 @@ export default function AnalyzePage() {
               <div className="grid grid-cols-3 gap-4 p-4 rounded-lg bg-white/3 border border-nexus-border">
                 <div className="text-center"><p className="text-xl font-bold text-nexus-cyan font-mono">{ingestResult.sources_processed}</p><p className="text-xs text-gray-500">Sources</p></div>
                 <div className="text-center"><p className="text-xl font-bold text-nexus-green font-mono">{ingestResult.sources_trusted}</p><p className="text-xs text-gray-500">Trusted</p></div>
-                <div className="text-center"><p className="text-xl font-bold text-nexus-amber font-mono">{ingestResult.contradictions_found}</p><p className="text-xs text-gray-500">Conflicts</p></div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-nexus-amber font-mono">{ingestResult.contradictions_found}</p>
+                  <p className="text-xs text-gray-500">Conflicts</p>
+                  {ingestResult.contradictions_found > 0 && (
+                    <p className="text-[10px] text-gray-600 mt-0.5 font-mono">
+                      {ingestResult.internal_contradictions_found
+                        ? `${ingestResult.internal_contradictions_found} internal`
+                        : null}
+                      {ingestResult.internal_contradictions_found && ingestResult.cross_source_contradictions_found
+                        ? " · "
+                        : null}
+                      {ingestResult.cross_source_contradictions_found
+                        ? `${ingestResult.cross_source_contradictions_found} cross-src`
+                        : null}
+                    </p>
+                  )}
+                </div>
               </div>
               <h2 className="text-sm font-semibold text-white">Configure constraints</h2>
               <Input label="Budget (PKR)" type="number" value={budget} onChange={(e) => setBudget(e.target.value)} />

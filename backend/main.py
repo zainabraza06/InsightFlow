@@ -185,10 +185,14 @@ async def ingest(
     trusted_sources = filtered["trusted"]
     contradictions = await contradiction_engine.detect_contradictions(trusted_sources)
 
+    all_contradictions = contradictions.get("contradictions", [])
+    internal_count = sum(1 for c in all_contradictions if c.get("contradiction_type") == "internal")
+    cross_count = sum(1 for c in all_contradictions if c.get("contradiction_type") == "cross_source")
+
     state_store["sources_ingested"] = len(all_sources)
     state_store["sources_trusted"] = len(filtered["trusted"])
     state_store["sources_excluded"] = len(filtered["excluded"])
-    state_store["contradictions_found"] = len(contradictions.get("contradictions", []))
+    state_store["contradictions_found"] = len(all_contradictions)
     state_store["active_domain"] = domain
     state_store["last_updated"] = datetime.utcnow().isoformat()
     state_store["ingestion_result"] = {
@@ -203,7 +207,9 @@ async def ingest(
         "sources_trusted": len(filtered["trusted"]),
         "sources_excluded": len(filtered["excluded"]),
         "credibility_map": filtered["credibility_map"],
-        "contradictions_found": len(contradictions.get("contradictions", [])),
+        "contradictions_found": len(all_contradictions),
+        "internal_contradictions_found": internal_count,
+        "cross_source_contradictions_found": cross_count,
         "contradictions": contradictions,
         "temporal_analysis": contradictions.get("temporal_analysis", {}),
         "noise_filtered": [s.get("source_type") for s in filtered["excluded"]],

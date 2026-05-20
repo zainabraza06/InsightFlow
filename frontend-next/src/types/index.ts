@@ -17,6 +17,7 @@ export interface Source {
 }
 
 export interface Contradiction {
+  contradiction_type?: "internal" | "cross_source";
   conflict: string;
   sources: string[];
   severity: string;
@@ -28,6 +29,8 @@ export interface IngestResult {
   sources_excluded: number;
   credibility_map: Record<string, number>;
   contradictions_found: number;
+  internal_contradictions_found?: number;
+  cross_source_contradictions_found?: number;
   contradictions: { contradictions: Contradiction[]; temporal_analysis: Record<string, unknown> };
   temporal_analysis: Record<string, unknown>;
   noise_filtered: string[];
