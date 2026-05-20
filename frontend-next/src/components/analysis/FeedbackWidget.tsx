@@ -81,7 +81,7 @@ export default function FeedbackWidget({ domain, analysisId = "", agentConfidenc
             {isLearning && (
               <div className="mt-2 px-3 py-2 rounded-lg bg-nexus-purple/10 border border-nexus-purple/20">
                 <p className="text-xs font-mono text-nexus-purple">
-                  {`[NEXUS LEARNING] domain=${domain} avg=${avg}/5 sentiment=${sentiment} — context injected into next Gemini call`}
+                  {`[INSIGHTFLOW LEARNING] domain=${domain} avg=${avg}/5 sentiment=${sentiment} — context injected into next Gemini call`}
                 </p>
               </div>
             )}
