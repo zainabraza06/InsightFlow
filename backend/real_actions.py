@@ -1,9 +1,9 @@
 """
-NEXUS Real Action Executors
+InsightFlow Real Action Executors
 Replaces simulation with actual API calls for steps 2, 3, and 4.
 
 Environment variables (set before running the server):
-  SMTP_USER          Gmail address used to send alerts        e.g. nexus@gmail.com
+  SMTP_USER          Gmail address used to send alerts
   SMTP_PASS          Gmail App Password (16-char, no spaces)
   NOTIFY_EMAIL       Recipient address for stakeholder alerts
   GOOGLE_SHEET_ID    ID from your Google Sheet URL
@@ -25,7 +25,7 @@ from email.mime.text import MIMEText
 
 import httpx
 
-logger = logging.getLogger("nexus.real_actions")
+logger = logging.getLogger("insightflow.real_actions")
 
 # ── env vars ──────────────────────────────────────────────────────────────────
 SMTP_USER       = os.environ.get("SMTP_USER", "")
@@ -43,13 +43,13 @@ def step2_notify_stakeholders(action_text: str, domain: str, insight: str) -> di
         logger.info("[REAL-ACTIONS] Email not configured — rich simulation")
         return _sim_email(action_text, domain)
 
-    subject = f"[NEXUS Alert] {domain} — Autonomous Action Triggered"
+    subject = f"[InsightFlow Alert] {domain} — Autonomous Action Triggered"
     html = f"""
     <html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <div style="background:#050508;padding:20px;border-radius:8px 8px 0 0">
-        <h2 style="color:#4f8ef7;margin:0">⬡ NEXUS Autonomous Agent Alert</h2>
+        <h2 style="color:#4f8ef7;margin:0">InsightFlow Autonomous Agent Alert</h2>
         <p style="color:#94a3b8;margin:6px 0 0 0;font-size:13px">
-          Challenge 1 · {domain} Domain · {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
+          {domain} Domain · {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
         </p>
       </div>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;padding:20px">
@@ -70,12 +70,12 @@ def step2_notify_stakeholders(action_text: str, domain: str, insight: str) -> di
             <td style="padding:8px;border:1px solid #e2e8f0">{datetime.utcnow().isoformat()}</td>
           </tr>
           <tr style="background:#f1f5f9">
-            <td style="padding:8px;border:1px solid #e2e8f0;font-weight:bold">Orchestrator</td>
-            <td style="padding:8px;border:1px solid #e2e8f0">Google Antigravity / NEXUS v2.0</td>
+            <td style="padding:8px;border:1px solid #e2e8f0;font-weight:bold">Engine</td>
+            <td style="padding:8px;border:1px solid #e2e8f0">InsightFlow v2.0</td>
           </tr>
         </table>
         <p style="color:#64748b;font-size:11px;margin-top:16px">
-          This alert was generated autonomously by the NEXUS agentic pipeline.
+          This alert was generated autonomously by the InsightFlow agentic pipeline.
           No human triggered this email.
         </p>
       </div>
@@ -116,7 +116,7 @@ def _sim_email(action_text: str, domain: str) -> dict:
         "real": False,
         "channel": "email_simulated",
         "to": NOTIFY_EMAIL or "stakeholders@company.com",
-        "subject": f"[NEXUS Alert] {domain} — Autonomous Action Triggered",
+        "subject": f"[InsightFlow Alert] {domain} — Autonomous Action Triggered",
         "body_preview": action_text[:120],
         "sent_at": datetime.utcnow().isoformat(),
         "http_status": 200,
@@ -126,7 +126,7 @@ def _sim_email(action_text: str, domain: str) -> dict:
 
 # ── Step 3 — Real Google Sheets update ───────────────────────────────────────
 def step3_update_system_state(domain: str, state_data: dict) -> dict:
-    """Append a row to the real NEXUS Google Sheet dashboard."""
+    """Append a row to the real InsightFlow Google Sheet dashboard."""
     if not (SHEET_ID and SA_JSON):
         logger.info("[REAL-ACTIONS] Google Sheets not configured — rich simulation")
         return _sim_sheet(domain, state_data)
@@ -157,7 +157,7 @@ def step3_update_system_state(domain: str, state_data: dict) -> dict:
             state_data.get("actions_completed", 0),
             state_data.get("total_cost_pkr", 0),
             state_data.get("risk_level", "REDUCED"),
-            "NEXUS Autonomous Agent",
+            "InsightFlow",
         ]
         sheet.append_row(row)
 
@@ -196,7 +196,7 @@ def _sim_sheet(domain: str, state_data: dict) -> dict:
             state_data.get("actions_completed", 0),
             state_data.get("total_cost_pkr", 0),
             "REDUCED",
-            "NEXUS Autonomous Agent",
+            "InsightFlow",
         ],
         "updated_at": datetime.utcnow().isoformat(),
         "http_status": 200,
@@ -212,11 +212,11 @@ def step4_launch_mitigation(action_text: str, domain: str, cost_pkr: int) -> dic
         return _sim_webhook(action_text, domain, cost_pkr)
 
     payload = {
-        "text": f"*[NEXUS Mitigation Launch]* {domain}",
+        "text": f"*[InsightFlow Mitigation Launch]* {domain}",
         "blocks": [
             {
                 "type": "header",
-                "text": {"type": "plain_text", "text": "⬡ NEXUS — Mitigation Launched"},
+                "text": {"type": "plain_text", "text": "InsightFlow — Mitigation Launched"},
             },
             {
                 "type": "section",
@@ -224,7 +224,7 @@ def step4_launch_mitigation(action_text: str, domain: str, cost_pkr: int) -> dic
                     {"type": "mrkdwn", "text": f"*Domain:*\n{domain}"},
                     {"type": "mrkdwn", "text": f"*Cost:*\nPKR {cost_pkr:,}"},
                     {"type": "mrkdwn", "text": f"*Time:*\n{datetime.utcnow().strftime('%H:%M UTC')}"},
-                    {"type": "mrkdwn", "text": f"*Source:*\nNEXUS Autonomous Agent"},
+                    {"type": "mrkdwn", "text": f"*Source:*\nInsightFlow"},
                 ],
             },
             {
