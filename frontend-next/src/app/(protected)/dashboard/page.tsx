@@ -123,7 +123,7 @@ export default function DashboardPage() {
         ingest_result: ingestResult,
         analyze_result: analyzeResult,
         execute_result: res,
-      }).catch(() => {}); // don't fail if not authed
+      }).catch((err: unknown) => console.warn("[History] save failed:", err));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Execute failed");
       setStep("analyzed");

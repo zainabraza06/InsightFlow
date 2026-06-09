@@ -6,7 +6,10 @@ import json
 import uuid
 import time
 import os
+import logging
 from pathlib import Path
+
+logger = logging.getLogger("insightflow.history")
 
 HISTORY_FILE = Path(__file__).parent / "history.json"
 MAX_PER_USER = 50
@@ -38,28 +41,53 @@ def _save(data: dict):
 
 def save_entry(user_email: str, entry: dict) -> str:
     eid = str(uuid.uuid4())
+    analyze = entry.get("analyze_result") or {}
+    execute = entry.get("execute_result") or {}
     record = {
         "id": eid,
         "user_email": user_email,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        **entry,
+        "domain": entry.get("domain", ""),
+        "topic": entry.get("topic", ""),
+        "sources_processed": entry.get("sources_processed", 0),
+        "contradictions_found": entry.get("contradictions_found", 0),
+        "actions_total": entry.get("actions_total", 0),
+        "total_cost_pkr": entry.get("total_cost_pkr", 0),
+        "status": entry.get("status", "completed"),
+        "analyze_result": {
+            "agents": analyze.get("agents", []),
+            "resolved": analyze.get("resolved", {}),
+            "action_chain": analyze.get("action_chain", []),
+            "consensus_confidence": analyze.get("consensus_confidence", 0),
+        } if analyze else None,
+        "execute_result": {
+            "chain": execute.get("chain", []),
+            "total_cost_pkr": execute.get("total_cost_pkr", 0),
+            "total_latency_ms": execute.get("total_latency_ms", 0),
+            "failures": execute.get("failures", 0),
+            "recovered": execute.get("recovered", 0),
+            "log": execute.get("log", []),
+        } if execute else None,
     }
-    if _FIRESTORE:
-        _firestore().collection("history").document(eid).set(record)
-        # Enforce MAX_PER_USER — fetch all, sort in Python, delete oldest
-        all_docs = (
-            _firestore().collection("history")
-            .where("user_email", "==", user_email)
-            .stream()
-        )
-        sorted_docs = sorted(all_docs, key=lambda d: d.to_dict().get("timestamp", ""), reverse=True)
-        for doc in sorted_docs[MAX_PER_USER:]:
-            doc.reference.delete()
-    else:
-        data = _load()
-        data.setdefault(user_email, []).insert(0, record)
-        data[user_email] = data[user_email][:MAX_PER_USER]
-        _save(data)
+    try:
+        if _FIRESTORE:
+            _firestore().collection("history").document(eid).set(record)
+            all_docs = (
+                _firestore().collection("history")
+                .where("user_email", "==", user_email)
+                .stream()
+            )
+            sorted_docs = sorted(all_docs, key=lambda d: d.to_dict().get("timestamp", ""), reverse=True)
+            for doc in sorted_docs[MAX_PER_USER:]:
+                doc.reference.delete()
+        else:
+            data = _load()
+            data.setdefault(user_email, []).insert(0, record)
+            data[user_email] = data[user_email][:MAX_PER_USER]
+            _save(data)
+    except Exception as exc:
+        logger.error(f"[History] save_entry failed for {user_email}: {exc}")
+        raise
     return eid
 
 

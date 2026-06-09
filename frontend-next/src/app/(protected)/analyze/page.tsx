@@ -101,7 +101,7 @@ export default function AnalyzePage() {
           ingest_result: ingestResult,
           analyze_result: aRes,
           execute_result: eRes,
-        }).catch(() => {});
+        }).catch((err: unknown) => console.warn("[History] save failed:", err));
         setCurrentStep(2);
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Analysis failed");

@@ -13,6 +13,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { ...authHeader(), ...init?.headers },
   });
+  if (res.status === 401) {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("nexus_token");
+      localStorage.removeItem("nexus_user");
+      document.cookie = "nexus_token=; path=/; max-age=0";
+      window.location.href = "/login";
+    }
+    throw new Error("Session expired. Please log in again.");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `Request failed: ${res.status}`);
